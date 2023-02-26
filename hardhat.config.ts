@@ -42,7 +42,7 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       saveDeployments: false,
-      tags: ['test', 'legacy', 'use_root'],
+      tags: ['test', 'use_root'],
       allowUnlimitedContractSize: false,
     },
     localhost: {
@@ -72,6 +72,19 @@ const config: HardhatUserConfig = {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,
       tags: ['legacy', 'use_root'],
       chainId: 1,
+      accounts: real_accounts,
+    },
+
+    optimism_goerli: {
+      url: `https://goerli.optimism.io`,
+      tags: ['test', 'use_root'],
+      chainId: 420,
+      accounts: real_accounts,
+    },
+    base_goerli: {
+      url: `https://goerli.base.org`,
+      tags: ['test', 'use_root'],
+      chainId: 84531,
       accounts: real_accounts,
     },
   },
@@ -111,7 +124,7 @@ const config: HardhatUserConfig = {
       default: 0,
     },
     owner: {
-      default: 1,
+      default: 0,
     },
   },
   external: {

@@ -16,20 +16,15 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     log: true,
   })
 
-  await deploy('ExponentialPremiumPriceOracle', {
+  await deploy('FixedPriceOracle', {
     from: deployer,
-    args: [
-      dummyOracle.address,
-      [0, 0, '20294266869609', '5073566717402', '158548959919'],
-      '100000000000000000000000000',
-      21,
-    ],
+    args: ['3000000000000000'],
     log: true,
   })
 }
 
 func.id = 'price-oracle'
-func.tags = ['ethregistrar', 'ExponentialPremiumPriceOracle', 'DummyOracle']
+func.tags = ['ethregistrar', 'PriceOracle', 'DummyOracle']
 func.dependencies = ['registry']
 
 export default func

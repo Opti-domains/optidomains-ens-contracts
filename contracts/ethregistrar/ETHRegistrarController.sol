@@ -13,6 +13,8 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {INameWrapper} from "../wrapper/INameWrapper.sol";
 import {ERC20Recoverable} from "../utils/ERC20Recoverable.sol";
 
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+
 error CommitmentTooNew(bytes32 commitment);
 error CommitmentTooOld(bytes32 commitment);
 error NameNotAvailable(string name);
@@ -23,6 +25,8 @@ error InsufficientValue();
 error Unauthorised(bytes32 node);
 error MaxCommitmentAgeTooLow();
 error MaxCommitmentAgeTooHigh();
+error MissingBackendSignature();
+error InvalidBackendSignature();
 
 /**
  * @dev A registrar controller for registering and renewing names at fixed cost.
@@ -38,7 +42,7 @@ contract ETHRegistrarController is
 
     uint256 public constant MIN_REGISTRATION_DURATION = 28 days;
     bytes32 private constant ETH_NODE =
-        0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae;
+        0x070904f45402bbf3992472be342c636609db649a8ec20a8aaa65faaafd4b8701;
     uint64 private constant MAX_EXPIRY = type(uint64).max;
     BaseRegistrarImplementation immutable base;
     IPriceOracle public immutable prices;
@@ -46,6 +50,8 @@ contract ETHRegistrarController is
     uint256 public immutable maxCommitmentAge;
     ReverseRegistrar public immutable reverseRegistrar;
     INameWrapper public immutable nameWrapper;
+    address public immutable backendAddress;
+    uint256 public immutable decenTimestamp;
 
     mapping(bytes32 => uint256) public commitments;
 
@@ -70,7 +76,9 @@ contract ETHRegistrarController is
         uint256 _minCommitmentAge,
         uint256 _maxCommitmentAge,
         ReverseRegistrar _reverseRegistrar,
-        INameWrapper _nameWrapper
+        INameWrapper _nameWrapper,
+        address _backendAddress,
+        uint256 _decenTimestamp
     ) {
         if (_maxCommitmentAge <= _minCommitmentAge) {
             revert MaxCommitmentAgeTooLow();
@@ -86,6 +94,9 @@ contract ETHRegistrarController is
         maxCommitmentAge = _maxCommitmentAge;
         reverseRegistrar = _reverseRegistrar;
         nameWrapper = _nameWrapper;
+
+        backendAddress = _backendAddress;
+        decenTimestamp = _decenTimestamp;
     }
 
     function rentPrice(
@@ -151,25 +162,30 @@ contract ETHRegistrarController is
         bool reverseRecord,
         uint16 ownerControlledFuses
     ) public payable override {
-        IPriceOracle.Price memory price = rentPrice(name, duration);
-        if (msg.value < price.base + price.premium) {
-            revert InsufficientValue();
+        IPriceOracle.Price memory price = IPriceOracle.Price({
+            base: msg.value,
+            premium: 0
+        });
+
+        if (block.timestamp > decenTimestamp) {
+            price = rentPrice(name, duration);
+            if (msg.value < price.base + price.premium) {
+                revert InsufficientValue();
+            }
         }
 
-        _consumeCommitment(
+        bytes32 commitment = makeCommitment(
             name,
+            owner,
             duration,
-            makeCommitment(
-                name,
-                owner,
-                duration,
-                secret,
-                resolver,
-                data,
-                reverseRecord,
-                ownerControlledFuses
-            )
+            secret,
+            resolver,
+            data,
+            reverseRecord,
+            ownerControlledFuses
         );
+
+        _consumeCommitment(name, duration, commitment);
 
         uint256 expires = nameWrapper.registerAndWrapETH2LD(
             name,
@@ -179,7 +195,24 @@ contract ETHRegistrarController is
             ownerControlledFuses
         );
 
-        if (data.length > 0) {
+        if (data.length == 0) {
+            revert MissingBackendSignature();
+        }
+
+        // In our implementation, data[0] is approval signature from backend
+        // After 1 Jan 2025, domain will become fully decentralized
+        if (block.timestamp <= decenTimestamp) {
+            bool signatureValid = SignatureChecker.isValidSignatureNow(
+                backendAddress,
+                commitment,
+                data[0]
+            );
+            if (!signatureValid) {
+                revert InvalidBackendSignature();
+            }
+        }
+
+        if (data.length > 1) {
             _setRecords(resolver, keccak256(bytes(name)), data);
         }
 

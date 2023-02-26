@@ -20,10 +20,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     'BaseRegistrarImplementation',
     owner,
   )
-  const priceOracle = await ethers.getContract(
-    'ExponentialPremiumPriceOracle',
-    owner,
-  )
+  const priceOracle = await ethers.getContract('FixedPriceOracle', owner)
   const reverseRegistrar = await ethers.getContract('ReverseRegistrar', owner)
   const nameWrapper = await ethers.getContract('NameWrapper', owner)
 
@@ -32,10 +29,12 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     args: [
       registrar.address,
       priceOracle.address,
-      60,
+      30,
       86400,
       reverseRegistrar.address,
       nameWrapper.address,
+      '0x000000187c72ee4a4120a3E626425595a34F185B',
+      '1735689600',
     ],
     log: true,
   }
@@ -70,43 +69,13 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     `Adding ETHRegistrarController as a controller of ReverseRegistrar (tx: ${tx2.hash})...`,
   )
   await tx2.wait()
-
-  const artifact = await deployments.getArtifact('IETHRegistrarController')
-  const interfaceId = computeInterfaceId(new Interface(artifact.abi))
-  const provider = new ethers.providers.StaticJsonRpcProvider(
-    ethers.provider.connection.url,
-    {
-      ...ethers.provider.network,
-      ensAddress: (await ethers.getContract('ENSRegistry')).address,
-    },
-  )
-  const resolver = await provider.getResolver('eth')
-  if (resolver === null) {
-    console.log(
-      'No resolver set for .eth; not setting interface for ETH Registrar Controller',
-    )
-    return
-  }
-  const resolverContract = await ethers.getContractAt(
-    'PublicResolver',
-    resolver.address,
-  )
-  const tx3 = await resolverContract.setInterface(
-    ethers.utils.namehash('eth'),
-    interfaceId,
-    controller.address,
-  )
-  console.log(
-    `Setting ETHRegistrarController interface ID ${interfaceId} on .eth resolver (tx: ${tx3.hash})...`,
-  )
-  await tx3.wait()
 }
 
 func.tags = ['ethregistrar', 'ETHRegistrarController']
 func.dependencies = [
   'ENSRegistry',
   'BaseRegistrarImplementation',
-  'ExponentialPremiumPriceOracle',
+  'PriceOracle',
   'ReverseRegistrar',
   'NameWrapper',
 ]

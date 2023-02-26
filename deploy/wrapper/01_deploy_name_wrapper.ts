@@ -49,33 +49,6 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     `Adding NameWrapper as controller on registrar (tx: ${tx2.hash})...`,
   )
   await tx2.wait()
-
-  const artifact = await deployments.getArtifact('INameWrapper')
-  const interfaceId = computeInterfaceId(new Interface(artifact.abi))
-  const providerWithEns = new ethers.providers.StaticJsonRpcProvider(
-    ethers.provider.connection.url,
-    { ...ethers.provider.network, ensAddress: registry.address },
-  )
-  const resolver = await providerWithEns.getResolver('eth')
-  if (resolver === null) {
-    console.log(
-      'No resolver set for .eth; not setting interface for NameWrapper',
-    )
-    return
-  }
-  const resolverContract = await ethers.getContractAt(
-    'PublicResolver',
-    resolver.address,
-  )
-  const tx3 = await resolverContract.setInterface(
-    ethers.utils.namehash('eth'),
-    interfaceId,
-    nameWrapper.address,
-  )
-  console.log(
-    `Setting NameWrapper interface ID ${interfaceId} on .eth resolver (tx: ${tx3.hash})...`,
-  )
-  await tx3.wait()
 }
 
 func.id = 'name-wrapper'

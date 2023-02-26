@@ -1,3 +1,4 @@
+import { keccak256 } from 'js-sha3'
 import { ethers } from 'hardhat'
 import { DeployFunction } from 'hardhat-deploy/types'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
@@ -24,6 +25,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const root = await ethers.getContract('Root')
 
+  console.log('Root address', root.address)
   const tx1 = await registry.setOwner(ZERO_HASH, root.address)
   console.log(
     `Setting owner of root node to root contract (tx: ${tx1.hash})...`,
@@ -57,6 +59,21 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
         `WARNING: Root is owned by ${rootOwner}; cannot transfer to owner account`,
       )
   }
+
+  // Set .op owner to owner wallet
+  const tx3 = await root
+    .connect(await ethers.getSigner(owner))
+    .setSubnodeOwner('0x' + keccak256('op'), owner)
+  console.log(
+    `Setting owner of eth node to registrar on root (tx: ${tx3.hash})...`,
+  )
+  await tx3.wait()
+
+  console.log(
+    '.op owner',
+    await registry.owner(ethers.utils.namehash('op')),
+    owner,
+  )
 
   return true
 }
