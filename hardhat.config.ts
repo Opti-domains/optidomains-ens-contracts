@@ -64,7 +64,7 @@ const config: HardhatUserConfig = {
     },
     goerli: {
       url: `https://goerli.infura.io/v3/${process.env.INFURA_API_KEY}`,
-      tags: ['test', 'legacy', 'use_root'],
+      tags: ['test', 'use_root'],
       chainId: 5,
       accounts: real_accounts,
     },

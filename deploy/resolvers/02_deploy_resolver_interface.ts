@@ -36,12 +36,12 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     const tx1 = await resolverContract
       .connect(await ethers.getSigner(owner))
       .setInterface(
-        ethers.utils.namehash('op'),
+        ethers.utils.namehash(process.env.TLD as string),
         interfaceId,
         nameWrapper.address,
       )
     console.log(
-      `Setting NameWrapper interface ID ${interfaceId} on .op resolver (tx: ${tx1.hash})...`,
+      `Setting NameWrapper interface ID ${interfaceId} on .${process.env.TLD} resolver (tx: ${tx1.hash})...`,
     )
     await tx1.wait()
   }
@@ -53,27 +53,30 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     const tx2 = await resolverContract
       .connect(await ethers.getSigner(owner))
       .setInterface(
-        ethers.utils.namehash('op'),
+        ethers.utils.namehash(process.env.TLD as string),
         interfaceId,
         controller.address,
       )
     console.log(
-      `Setting ETHRegistrarController interface ID ${interfaceId} on .op resolver (tx: ${tx2.hash})...`,
+      `Setting ETHRegistrarController interface ID ${interfaceId} on .${process.env.TLD} resolver (tx: ${tx2.hash})...`,
     )
     await tx2.wait()
   }
 
   const tx3 = await root
     .connect(await ethers.getSigner(owner))
-    .setSubnodeOwner('0x' + keccak256('op'), registrar.address)
+    .setSubnodeOwner(
+      '0x' + keccak256(process.env.TLD as string),
+      registrar.address,
+    )
   console.log(
     `Setting owner of eth node to registrar on root (tx: ${tx3.hash})...`,
   )
   await tx3.wait()
 
   console.log(
-    '.op owner',
-    await registry.owner(ethers.utils.namehash('op')),
+    `.${process.env.TLD} owner`,
+    await registry.owner(ethers.utils.namehash(process.env.TLD as string)),
     registrar.address,
   )
 }

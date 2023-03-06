@@ -63,15 +63,15 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Set .op owner to owner wallet
   const tx3 = await root
     .connect(await ethers.getSigner(owner))
-    .setSubnodeOwner('0x' + keccak256('op'), owner)
+    .setSubnodeOwner('0x' + keccak256(process.env.TLD as string), owner)
   console.log(
     `Setting owner of eth node to registrar on root (tx: ${tx3.hash})...`,
   )
   await tx3.wait()
 
   console.log(
-    '.op owner',
-    await registry.owner(ethers.utils.namehash('op')),
+    `.${process.env.TLD} owner`,
+    await registry.owner(ethers.utils.namehash(process.env.TLD as string)),
     owner,
   )
 

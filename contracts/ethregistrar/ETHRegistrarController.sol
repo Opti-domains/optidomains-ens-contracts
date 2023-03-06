@@ -42,7 +42,7 @@ contract ETHRegistrarController is
 
     uint256 public constant MIN_REGISTRATION_DURATION = 28 days;
     bytes32 private constant ETH_NODE =
-        0x070904f45402bbf3992472be342c636609db649a8ec20a8aaa65faaafd4b8701;
+        0x7e7650bbd57a49caffbb4c83ce43045d2653261b7953b80d47500d9eb37b6134;
     uint64 private constant MAX_EXPIRY = type(uint64).max;
     BaseRegistrarImplementation immutable base;
     IPriceOracle public immutable prices;
@@ -162,6 +162,30 @@ contract ETHRegistrarController is
         bool reverseRecord,
         uint16 ownerControlledFuses
     ) public payable override {
+        registerWhitelisted(
+            name,
+            owner,
+            duration,
+            secret,
+            resolver,
+            data,
+            reverseRecord,
+            ownerControlledFuses,
+            ""
+        );
+    }
+
+    function registerWhitelisted(
+        string calldata name,
+        address owner,
+        uint256 duration,
+        bytes32 secret,
+        address resolver,
+        bytes[] calldata data,
+        bool reverseRecord,
+        uint16 ownerControlledFuses,
+        bytes memory backendSignature
+    ) public payable override {
         IPriceOracle.Price memory price = IPriceOracle.Price({
             base: msg.value,
             premium: 0
@@ -174,18 +198,38 @@ contract ETHRegistrarController is
             }
         }
 
-        bytes32 commitment = makeCommitment(
-            name,
-            owner,
-            duration,
-            secret,
-            resolver,
-            data,
-            reverseRecord,
-            ownerControlledFuses
-        );
+        {
+            bytes32 commitment = makeCommitment(
+                name,
+                owner,
+                duration,
+                secret,
+                resolver,
+                data,
+                reverseRecord,
+                ownerControlledFuses
+            );
 
-        _consumeCommitment(name, duration, commitment);
+            // After 1 Jan 2025, domain will become fully decentralized
+            if (block.timestamp <= decenTimestamp) {
+                bool signatureValid = SignatureChecker.isValidSignatureNow(
+                    backendAddress,
+                    keccak256(
+                        abi.encode(
+                            commitment,
+                            commitments[commitment],
+                            block.chainid
+                        )
+                    ),
+                    backendSignature
+                );
+                if (!signatureValid) {
+                    revert InvalidBackendSignature();
+                }
+            }
+
+            _consumeCommitment(name, duration, commitment);
+        }
 
         uint256 expires = nameWrapper.registerAndWrapETH2LD(
             name,
@@ -195,24 +239,7 @@ contract ETHRegistrarController is
             ownerControlledFuses
         );
 
-        if (data.length == 0) {
-            revert MissingBackendSignature();
-        }
-
-        // In our implementation, data[0] is approval signature from backend
-        // After 1 Jan 2025, domain will become fully decentralized
-        if (block.timestamp <= decenTimestamp) {
-            bool signatureValid = SignatureChecker.isValidSignatureNow(
-                backendAddress,
-                commitment,
-                data[0]
-            );
-            if (!signatureValid) {
-                revert InvalidBackendSignature();
-            }
-        }
-
-        if (data.length > 1) {
+        if (data.length > 0) {
             _setRecords(resolver, keccak256(bytes(name)), data);
         }
 

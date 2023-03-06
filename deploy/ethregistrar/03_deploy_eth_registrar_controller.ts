@@ -30,7 +30,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
       registrar.address,
       priceOracle.address,
       30,
-      86400,
+      3600,
       reverseRegistrar.address,
       nameWrapper.address,
       '0x000000187c72ee4a4120a3E626425595a34F185B',
