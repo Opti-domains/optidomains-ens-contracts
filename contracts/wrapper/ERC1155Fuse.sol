@@ -40,11 +40,11 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
      */
     function approve(address to, uint256 tokenId) public virtual {
         address owner = ownerOf(tokenId);
-        require(to != owner, "ERC721: approval to current owner");
+        require(to != owner, "ACO");
 
         require(
             msg.sender == owner || isApprovedForAll(owner, msg.sender),
-            "ERC721: approve caller is not token owner or approved for all"
+            "AC"
         );
 
         _approve(to, tokenId);
@@ -82,10 +82,7 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         address account,
         uint256 id
     ) public view virtual override returns (uint256) {
-        require(
-            account != address(0),
-            "ERC1155: balance query for the zero address"
-        );
+        require(account != address(0), "BQ");
         address owner = ownerOf(id);
         if (owner == account) {
             return 1;
@@ -104,10 +101,7 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         address[] memory accounts,
         uint256[] memory ids
     ) public view virtual override returns (uint256[] memory) {
-        require(
-            accounts.length == ids.length,
-            "ERC1155: accounts and ids length mismatch"
-        );
+        require(accounts.length == ids.length, "AI");
 
         uint256[] memory batchBalances = new uint256[](accounts.length);
 
@@ -125,10 +119,7 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         address operator,
         bool approved
     ) public virtual override {
-        require(
-            msg.sender != operator,
-            "ERC1155: setting approval status for self"
-        );
+        require(msg.sender != operator, "SAS");
 
         _operatorApprovals[msg.sender][operator] = approved;
         emit ApprovalForAll(msg.sender, operator, approved);
@@ -166,10 +157,10 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         uint256 amount,
         bytes memory data
     ) public virtual override {
-        require(to != address(0), "ERC1155: transfer to the zero address");
+        require(to != address(0), "TZ");
         require(
             from == msg.sender || isApprovedForAll(from, msg.sender),
-            "ERC1155: caller is not owner nor approved"
+            "CNO"
         );
 
         _transfer(from, to, id, amount, data);
@@ -185,14 +176,11 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         uint256[] memory amounts,
         bytes memory data
     ) public virtual override {
-        require(
-            ids.length == amounts.length,
-            "ERC1155: ids and amounts length mismatch"
-        );
-        require(to != address(0), "ERC1155: transfer to the zero address");
+        require(ids.length == amounts.length, "IALM");
+        require(to != address(0), "TZ");
         require(
             from == msg.sender || isApprovedForAll(from, msg.sender),
-            "ERC1155: transfer caller is not owner nor approved"
+            "TCNO"
         );
 
         for (uint256 i = 0; i < ids.length; ++i) {
@@ -203,10 +191,7 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
 
             _beforeTransfer(id, fuses, expiry);
 
-            require(
-                amount == 1 && oldOwner == from,
-                "ERC1155: insufficient balance for transfer"
-            );
+            require(amount == 1 && oldOwner == from, "IBT");
             _setData(id, to, fuses, expiry);
         }
 
@@ -275,12 +260,9 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
             fuses = fuses | parentControlledFuses;
         }
 
-        require(oldOwner == address(0), "ERC1155: mint of existing token");
-        require(owner != address(0), "ERC1155: mint to the zero address");
-        require(
-            owner != address(this),
-            "ERC1155: newOwner cannot be the NameWrapper contract"
-        );
+        require(oldOwner == address(0), "MOE");
+        require(owner != address(0), "MTZ");
+        require(owner != address(this), "NON");
 
         _setData(tokenId, owner, fuses, expiry);
         emit TransferSingle(msg.sender, address(0x0), owner, tokenId, 1);
@@ -312,15 +294,12 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         uint256 id,
         uint256 amount,
         bytes memory data
-    ) internal {
+    ) internal virtual {
         (address oldOwner, uint32 fuses, uint64 expiry) = getData(id);
 
         _beforeTransfer(id, fuses, expiry);
 
-        require(
-            amount == 1 && oldOwner == from,
-            "ERC1155: insufficient balance for transfer"
-        );
+        require(amount == 1 && oldOwner == from, "IB");
 
         if (oldOwner == to) {
             return;
@@ -354,12 +333,12 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
                 if (
                     response != IERC1155Receiver(to).onERC1155Received.selector
                 ) {
-                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                    revert("RT");
                 }
             } catch Error(string memory reason) {
                 revert(reason);
             } catch {
-                revert("ERC1155: transfer to non ERC1155Receiver implementer");
+                revert("TNI");
             }
         }
     }
@@ -386,12 +365,12 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
                     response !=
                     IERC1155Receiver(to).onERC1155BatchReceived.selector
                 ) {
-                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                    revert("RT");
                 }
             } catch Error(string memory reason) {
                 revert(reason);
             } catch {
-                revert("ERC1155: transfer to non ERC1155Receiver implementer");
+                revert("TNI");
             }
         }
     }

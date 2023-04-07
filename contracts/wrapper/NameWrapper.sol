@@ -28,7 +28,7 @@ error OperationProhibited(bytes32 node);
 error NameIsNotWrapped();
 error NameIsStillExpired();
 
-contract NameWrapper is
+abstract contract NameWrapper is
     Ownable,
     ERC1155Fuse,
     INameWrapper,
@@ -43,7 +43,6 @@ contract NameWrapper is
     IBaseRegistrar public immutable registrar;
     IMetadataService public metadataService;
     mapping(bytes32 => bytes) public names;
-    string public constant name = "NameWrapper";
 
     uint64 private constant GRACE_PERIOD = 90 days;
     bytes32 private immutable ETH_NODE;
@@ -188,7 +187,6 @@ contract NameWrapper is
      * @param tokenId The id of the token
      * @return string uri of the metadata service
      */
-
     function uri(
         uint256 tokenId
     )
@@ -975,7 +973,7 @@ contract NameWrapper is
         address owner,
         uint32 fuses,
         uint64 expiry
-    ) internal override {
+    ) internal virtual override {
         _canFusesBeBurned(node, fuses);
         (address oldOwner, , ) = super.getData(uint256(node));
         if (oldOwner != address(0)) {
