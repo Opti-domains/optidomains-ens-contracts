@@ -6,49 +6,49 @@ import {StringUtils} from "./StringUtils.sol";
 import {Resolver} from "../resolvers/Resolver.sol";
 import {ENS} from "../registry/ENS.sol";
 import {ReverseRegistrar} from "../reverseRegistrar/ReverseRegistrar.sol";
-import {ReverseClaimer} from "../reverseRegistrar/ReverseClaimer.sol";
-import {IETHRegistrarController, IPriceOracle} from "./IETHRegistrarController.sol";
+import {IWhitelistRegistrarController, IPriceOracle} from "./IWhitelistRegistrarController.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {INameWrapper} from "../wrapper/INameWrapper.sol";
 import {ERC20Recoverable} from "../utils/ERC20Recoverable.sol";
+import {ISupporterPlan} from "./ISupporterPlan.sol";
 
-error CommitmentTooNew(bytes32 commitment);
-error CommitmentTooOld(bytes32 commitment);
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+
 error NameNotAvailable(string name);
 error DurationTooShort(uint256 duration);
+error NegativeDuration();
 error ResolverRequiredWhenDataSupplied();
 error UnexpiredCommitmentExists(bytes32 commitment);
 error InsufficientValue();
 error Unauthorised(bytes32 node);
-error MaxCommitmentAgeTooLow();
-error MaxCommitmentAgeTooHigh();
+error InvalidOperatorSignature();
 
 /**
- * @dev A registrar controller for registering and renewing names at fixed cost.
+ * @dev A registrar controller for registering domain name from whitelist signature provided by a operator.
  */
-contract ETHRegistrarController is
+contract WhitelistRegistrarController is
     Ownable,
-    IETHRegistrarController,
+    IWhitelistRegistrarController,
     IERC165,
-    ERC20Recoverable,
-    ReverseClaimer
+    ERC20Recoverable
 {
     using StringUtils for *;
     using Address for address;
 
     uint256 public constant MIN_REGISTRATION_DURATION = 28 days;
-    bytes32 private constant ETH_NODE =
-        0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae;
+    bytes32 public immutable ETH_NODE;
     uint64 private constant MAX_EXPIRY = type(uint64).max;
     BaseRegistrarImplementation immutable base;
-    IPriceOracle public immutable prices;
-    uint256 public immutable minCommitmentAge;
-    uint256 public immutable maxCommitmentAge;
     ReverseRegistrar public immutable reverseRegistrar;
     INameWrapper public immutable nameWrapper;
+    string private ethNode;
+    address public operator;
+    uint16 public baseFuses;
+
+    ISupporterPlan public supporterPlan;
 
     mapping(bytes32 => uint256) public commitments;
 
@@ -69,35 +69,21 @@ contract ETHRegistrarController is
 
     constructor(
         BaseRegistrarImplementation _base,
-        IPriceOracle _prices,
-        uint256 _minCommitmentAge,
-        uint256 _maxCommitmentAge,
         ReverseRegistrar _reverseRegistrar,
         INameWrapper _nameWrapper,
-        ENS _ens
-    ) ReverseClaimer(_ens, msg.sender) {
-        if (_maxCommitmentAge <= _minCommitmentAge) {
-            revert MaxCommitmentAgeTooLow();
-        }
-
-        if (_maxCommitmentAge > block.timestamp) {
-            revert MaxCommitmentAgeTooHigh();
-        }
-
+        address _operator,
+        uint16 _baseFuses,
+        string memory _ethNode
+    ) {
         base = _base;
-        prices = _prices;
-        minCommitmentAge = _minCommitmentAge;
-        maxCommitmentAge = _maxCommitmentAge;
         reverseRegistrar = _reverseRegistrar;
         nameWrapper = _nameWrapper;
-    }
-
-    function rentPrice(
-        string memory name,
-        uint256 duration
-    ) public view override returns (IPriceOracle.Price memory price) {
-        bytes32 label = keccak256(bytes(name));
-        price = prices.price(name, base.nameExpires(uint256(label)), duration);
+        ethNode = _ethNode;
+        baseFuses = _baseFuses;
+        operator = _operator;
+        ETH_NODE = keccak256(
+            abi.encodePacked(bytes32(0), keccak256(bytes(_ethNode)))
+        );
     }
 
     function valid(string memory name) public pure returns (bool) {
@@ -112,7 +98,7 @@ contract ETHRegistrarController is
     function makeCommitment(
         string memory name,
         address owner,
-        uint256 duration,
+        uint256 expiration,
         bytes32 secret,
         address resolver,
         bytes[] calldata data,
@@ -128,7 +114,7 @@ contract ETHRegistrarController is
                 abi.encode(
                     label,
                     owner,
-                    duration,
+                    expiration,
                     secret,
                     resolver,
                     data,
@@ -138,92 +124,116 @@ contract ETHRegistrarController is
             );
     }
 
-    function commit(bytes32 commitment) public override {
-        if (commitments[commitment] + maxCommitmentAge >= block.timestamp) {
-            revert UnexpiredCommitmentExists(commitment);
-        }
-        commitments[commitment] = block.timestamp;
-    }
-
     function register(
         string calldata name,
         address owner,
-        uint256 duration,
+        uint256 expiration,
         bytes32 secret,
         address resolver,
         bytes[] calldata data,
         bool reverseRecord,
-        uint16 ownerControlledFuses
+        uint16 ownerControlledFuses,
+        bytes calldata operatorSignature
     ) public payable override {
-        IPriceOracle.Price memory price = rentPrice(name, duration);
-        if (msg.value < price.base + price.premium) {
-            revert InsufficientValue();
-        }
-
-        _consumeCommitment(
-            name,
-            duration,
-            makeCommitment(
+        {
+            bytes32 commitment = makeCommitment(
                 name,
                 owner,
-                duration,
+                expiration - block.timestamp,
                 secret,
                 resolver,
                 data,
                 reverseRecord,
                 ownerControlledFuses
-            )
-        );
-
-        uint256 expires = nameWrapper.registerAndWrapETH2LD(
-            name,
-            owner,
-            duration,
-            resolver,
-            ownerControlledFuses
-        );
-
-        if (data.length > 0) {
-            _setRecords(resolver, keccak256(bytes(name)), data);
-        }
-
-        if (reverseRecord) {
-            _setReverseRecord(name, resolver, msg.sender);
-        }
-
-        emit NameRegistered(
-            name,
-            keccak256(bytes(name)),
-            owner,
-            price.base,
-            price.premium,
-            expires
-        );
-
-        if (msg.value > (price.base + price.premium)) {
-            payable(msg.sender).transfer(
-                msg.value - (price.base + price.premium)
             );
+
+            bool signatureValid = SignatureChecker.isValidSignatureNow(
+                operator,
+                keccak256(
+                    abi.encode(
+                        address(this),
+                        block.chainid,
+                        0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583, // keccak256("register")
+                        commitment
+                    )
+                ),
+                operatorSignature
+            );
+            if (!signatureValid) {
+                revert InvalidOperatorSignature();
+            }
+        }
+
+        {
+            uint256 expires = nameWrapper.registerAndWrapETH2LD(
+                name,
+                owner,
+                expiration - block.timestamp,
+                resolver,
+                ownerControlledFuses | baseFuses
+            );
+
+            if (data.length > 0) {
+                _setRecords(resolver, keccak256(bytes(name)), data);
+            }
+
+            if (reverseRecord) {
+                _setReverseRecord(name, resolver, msg.sender);
+            }
+
+            emit NameRegistered(
+                name,
+                keccak256(bytes(name)),
+                owner,
+                0,
+                msg.value,
+                expires
+            );
+        }
+
+        // Register supporter plan or donate ETH
+        if (msg.value > 0 && address(supporterPlan) != address(0)) {
+            supporterPlan.buy{value: msg.value}(name);
         }
     }
 
     function renew(
         string calldata name,
-        uint256 duration
-    ) external payable override {
+        uint256 expiration,
+        bytes calldata operatorSignature
+    ) external override {
         bytes32 labelhash = keccak256(bytes(name));
         uint256 tokenId = uint256(labelhash);
-        IPriceOracle.Price memory price = rentPrice(name, duration);
-        if (msg.value < price.base) {
-            revert InsufficientValue();
-        }
-        uint256 expires = nameWrapper.renew(tokenId, duration);
 
-        if (msg.value > price.base) {
-            payable(msg.sender).transfer(msg.value - price.base);
+        if (expiration <= base.nameExpires(tokenId)) {
+            revert NegativeDuration();
         }
 
-        emit NameRenewed(name, labelhash, msg.value, expires);
+        {
+            bool signatureValid = SignatureChecker.isValidSignatureNow(
+                operator,
+                keccak256(
+                    abi.encode(
+                        address(this),
+                        block.chainid,
+                        0xde0eadb8cc1e667dab2d95e011b2f2ae72a64de91e0b652eecb07930f6b2ffaa, // keccak256("renew")
+                        labelhash,
+                        expiration
+                    )
+                ),
+                operatorSignature
+            );
+            if (!signatureValid) {
+                revert InvalidOperatorSignature();
+            }
+        }
+
+        uint256 expires = nameWrapper.renew(
+            tokenId,
+            expiration - block.timestamp
+        );
+
+        emit NameRenewed(name, labelhash, 0, expires);
     }
 
     function withdraw() public {
@@ -244,35 +254,20 @@ contract ETHRegistrarController is
     ) external pure returns (bool) {
         return
             interfaceID == type(IERC165).interfaceId ||
-            interfaceID == type(IETHRegistrarController).interfaceId;
+            interfaceID == type(IWhitelistRegistrarController).interfaceId;
+    }
+
+    /* Owner control functions */
+
+    function setBaseFuses(uint16 _baseFuses) public onlyOwner {
+        baseFuses = _baseFuses;
+    }
+
+    function setSupporterPlan(ISupporterPlan _supporterPlan) public onlyOwner {
+        supporterPlan = _supporterPlan;
     }
 
     /* Internal functions */
-
-    function _consumeCommitment(
-        string memory name,
-        uint256 duration,
-        bytes32 commitment
-    ) internal {
-        // Require an old enough commitment.
-        if (commitments[commitment] + minCommitmentAge > block.timestamp) {
-            revert CommitmentTooNew(commitment);
-        }
-
-        // If the commitment is too old, or the name is registered, stop
-        if (commitments[commitment] + maxCommitmentAge <= block.timestamp) {
-            revert CommitmentTooOld(commitment);
-        }
-        if (!available(name)) {
-            revert NameNotAvailable(name);
-        }
-
-        delete (commitments[commitment]);
-
-        if (duration < MIN_REGISTRATION_DURATION) {
-            revert DurationTooShort(duration);
-        }
-    }
 
     function _setRecords(
         address resolverAddress,
@@ -294,7 +289,7 @@ contract ETHRegistrarController is
             msg.sender,
             owner,
             resolver,
-            string.concat(name, ".eth")
+            string.concat(name, ".", ethNode)
         );
     }
 }

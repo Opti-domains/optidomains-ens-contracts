@@ -46,10 +46,8 @@ contract NameWrapper is
     string public constant name = "NameWrapper";
 
     uint64 private constant GRACE_PERIOD = 90 days;
-    bytes32 private constant ETH_NODE =
-        0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae;
-    bytes32 private constant ETH_LABELHASH =
-        0x4f5b812789fc606be1b3b16908db13fc7a9adf7ca72641f84d75b47069d3d7f0;
+    bytes32 private immutable ETH_NODE;
+    bytes32 private immutable ETH_LABELHASH;
     bytes32 private constant ROOT_NODE =
         0x0000000000000000000000000000000000000000000000000000000000000000;
 
@@ -59,11 +57,17 @@ contract NameWrapper is
     constructor(
         ENS _ens,
         IBaseRegistrar _registrar,
-        IMetadataService _metadataService
+        IMetadataService _metadataService,
+        string memory _ethNode
     ) ReverseClaimer(_ens, msg.sender) {
         ens = _ens;
         registrar = _registrar;
         metadataService = _metadataService;
+
+        ETH_NODE = keccak256(
+            abi.encodePacked(bytes32(0), keccak256(bytes(_ethNode)))
+        );
+        ETH_LABELHASH = keccak256(bytes(_ethNode));
 
         /* Burn PARENT_CANNOT_CONTROL and CANNOT_UNWRAP fuses for ROOT_NODE and ETH_NODE and set expiry to max */
 
@@ -80,7 +84,8 @@ contract NameWrapper is
             MAX_EXPIRY
         );
         names[ROOT_NODE] = "\x00";
-        names[ETH_NODE] = "\x03eth\x00";
+        names[ETH_NODE] = bytes(string.concat("\x00", _ethNode, "\x00"));
+        names[ETH_NODE][0] = bytes1(uint8(names[ETH_NODE].length - 2));
     }
 
     function supportsInterface(
@@ -1093,7 +1098,7 @@ contract NameWrapper is
         bytes32 labelhash = keccak256(bytes(label));
         bytes32 node = _makeNode(ETH_NODE, labelhash);
         // hardcode dns-encoded eth string for gas savings
-        bytes memory name = _addLabel(label, "\x03eth\x00");
+        bytes memory name = _addLabel(label, names[ETH_NODE]);
         names[node] = name;
 
         _wrap(
