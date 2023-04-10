@@ -20,10 +20,11 @@ const {
 
 const DAY = 24 * 60 * 60
 const REGISTRATION_TIME = 28 * DAY
-const BUFFERED_REGISTRATION_COST = REGISTRATION_TIME + 3 * DAY
+// const BUFFERED_REGISTRATION_COST = REGISTRATION_TIME + 3 * DAY
+const BUFFERED_REGISTRATION_COST = 0
 const GRACE_PERIOD = 90 * DAY
 const NULL_ADDRESS = ZERO_ADDRESS
-contract('ETHRegistrarController', function () {
+contract('WhitelistRegistrarController', function () {
   let ens
   let resolver
   let resolver2 // resolver signed by accounts[1]
@@ -37,9 +38,33 @@ contract('ETHRegistrarController', function () {
 
   const secret =
     '0x0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF'
+  let ownerSigner
   let ownerAccount // Account that owns the registrar
   let registrantAccount // Account that owns test names
   let accounts = []
+
+  async function registerSignature(commitment) {
+    // Define the input types and values of the transaction data
+    const inputTypes = ['bytes32', 'uint256', 'uint256']
+    const inputValues = [commitment, commitmentTimestamp, body.chainId]
+
+    console.log(inputValues)
+
+    // ABI-encode the transaction data
+    const abiEncodedTransactionData = ethers.utils.defaultAbiCoder.encode(
+      inputTypes,
+      inputValues,
+    )
+
+    console.log(ethers.utils.keccak256(abiEncodedTransactionData))
+
+    const signingKey = new ethers.utils.SigningKey(privateKey)
+    const signature = signingKey.signDigest(
+      ethers.utils.keccak256(abiEncodedTransactionData),
+    )
+
+    console.log(signature)
+  }
 
   async function registerName(
     name,
@@ -56,11 +81,11 @@ contract('ETHRegistrarController', function () {
       0,
     )
     var tx = await controller.commit(commitment)
-    expect(await controller.commitments(commitment)).to.equal(
-      (await provider.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller.commitments(commitment)).to.equal(
+    //   (await provider.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
 
     var tx = await controller.register(
       name,
@@ -79,6 +104,7 @@ contract('ETHRegistrarController', function () {
 
   before(async () => {
     signers = await ethers.getSigners()
+    ownerSigner = signers[0]
     ownerAccount = await signers[0].getAddress()
     registrantAccount = await signers[1].getAddress()
     accounts = [ownerAccount, registrantAccount, signers[2].getAddress()]
@@ -109,21 +135,20 @@ contract('ETHRegistrarController', function () {
 
     await ens.setSubnodeOwner(EMPTY_BYTES, sha3('eth'), baseRegistrar.address)
 
-    const dummyOracle = await deploy('DummyOracle', '100000000')
-    priceOracle = await deploy(
-      'StablePriceOracle',
-      dummyOracle.address,
-      [0, 0, 4, 2, 1],
-    )
+    // const dummyOracle = await deploy('DummyOracle', '100000000')
+    // priceOracle = await deploy(
+    //   'StablePriceOracle',
+    //   dummyOracle.address,
+    //   [0, 0, 4, 2, 1],
+    // )
     controller = await deploy(
-      'ETHRegistrarController',
+      'WhitelistRegistrarController',
       baseRegistrar.address,
-      priceOracle.address,
-      600,
-      86400,
       reverseRegistrar.address,
       nameWrapper.address,
-      ens.address,
+      ownerAccount,
+      0,
+      'eth',
     )
     controller2 = controller.connect(signers[1])
     await nameWrapper.setController(controller.address, true)
@@ -151,6 +176,10 @@ contract('ETHRegistrarController', function () {
     ]
 
     resolver2 = await resolver.connect(signers[1])
+
+    // Patch commit
+    controller.commit = async () => {}
+    controller2.commit = async () => {}
   })
 
   beforeEach(async () => {
@@ -212,7 +241,7 @@ contract('ETHRegistrarController', function () {
 
     expect(
       (await web3.eth.getBalance(controller.address)) - balanceBefore,
-    ).to.equal(REGISTRATION_TIME)
+    ).to.equal(0)
   })
 
   it('should revert when not enough ether is transferred', async () => {
@@ -239,11 +268,11 @@ contract('ETHRegistrarController', function () {
       0,
     )
     var tx = await controller2.commit(commitment)
-    expect(await controller2.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller2.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
     var balanceBefore = await web3.eth.getBalance(controller.address)
     var tx = await controller2.register(
       'newconfigname',
@@ -272,7 +301,7 @@ contract('ETHRegistrarController', function () {
 
     expect(
       (await web3.eth.getBalance(controller.address)) - balanceBefore,
-    ).to.equal(REGISTRATION_TIME)
+    ).to.equal(0)
 
     var nodehash = namehash('newconfigname.eth')
     expect(await ens.resolver(nodehash)).to.equal(resolver.address)
@@ -315,11 +344,11 @@ contract('ETHRegistrarController', function () {
     )
 
     const tx = await controller.commit(commitment)
-    expect(await controller.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
       controller.register(
         'newconfigname',
@@ -348,11 +377,11 @@ contract('ETHRegistrarController', function () {
     )
 
     const tx = await controller.commit(commitment)
-    expect(await controller.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
       controller.register(
         'newconfigname',
@@ -387,11 +416,11 @@ contract('ETHRegistrarController', function () {
       0,
     )
     const tx = await controller2.commit(commitment)
-    expect(await controller2.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller2.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
 
     await expect(
       controller2.register(
@@ -434,11 +463,11 @@ contract('ETHRegistrarController', function () {
       0,
     )
     const tx = await controller2.commit(commitment)
-    expect(await controller2.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller2.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
 
     await expect(
       controller2.register(
@@ -476,11 +505,11 @@ contract('ETHRegistrarController', function () {
       0,
     )
     let tx = await controller.commit(commitment)
-    expect(await controller.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
+    // expect(await controller.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     const balanceBefore = await web3.eth.getBalance(controller.address)
     let tx2 = await controller.register(
       'newconfigname2',
@@ -512,7 +541,7 @@ contract('ETHRegistrarController', function () {
     expect(await resolver['addr(bytes32)'](nodehash)).to.equal(NULL_ADDRESS)
     expect(
       (await web3.eth.getBalance(controller.address)) - balanceBefore,
-    ).to.equal(REGISTRATION_TIME)
+    ).to.equal(0)
   })
 
   it('should include the owner in the commitment', async () => {
@@ -529,7 +558,7 @@ contract('ETHRegistrarController', function () {
       ),
     )
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
       controller.register(
         'newname2',
@@ -563,7 +592,7 @@ contract('ETHRegistrarController', function () {
       ),
     )
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
       controller.register(
         label,
@@ -581,36 +610,36 @@ contract('ETHRegistrarController', function () {
     ).to.be.revertedWith(`NameNotAvailable("${label}")`)
   })
 
-  it('should reject for expired commitments', async () => {
-    const commitment = await controller.makeCommitment(
-      'newname2',
-      registrantAccount,
-      REGISTRATION_TIME,
-      secret,
-      NULL_ADDRESS,
-      [],
-      false,
-      0,
-    )
-    await controller.commit(commitment)
+  // it('should reject for expired commitments', async () => {
+  //   const commitment = await controller.makeCommitment(
+  //     'newname2',
+  //     registrantAccount,
+  //     REGISTRATION_TIME,
+  //     secret,
+  //     NULL_ADDRESS,
+  //     [],
+  //     false,
+  //     0,
+  //   )
+  //   await controller.commit(commitment)
 
-    await evm.advanceTime((await controller.maxCommitmentAge()).toNumber() + 1)
-    await expect(
-      controller.register(
-        'newname2',
-        registrantAccount,
-        REGISTRATION_TIME,
-        secret,
-        NULL_ADDRESS,
-        [],
-        false,
-        0,
-        {
-          value: BUFFERED_REGISTRATION_COST,
-        },
-      ),
-    ).to.be.revertedWith(`CommitmentTooOld("${commitment}")`)
-  })
+  //   await evm.advanceTime((await controller.maxCommitmentAge()).toNumber() + 1)
+  //   await expect(
+  //     controller.register(
+  //       'newname2',
+  //       registrantAccount,
+  //       REGISTRATION_TIME,
+  //       secret,
+  //       NULL_ADDRESS,
+  //       [],
+  //       false,
+  //       0,
+  //       {
+  //         value: BUFFERED_REGISTRATION_COST,
+  //       },
+  //     ),
+  //   ).to.be.revertedWith(`CommitmentTooOld("${commitment}")`)
+  // })
 
   it('should allow anyone to renew a name without changing fuse expiry', async () => {
     await registerName('newname')
@@ -628,7 +657,7 @@ contract('ETHRegistrarController', function () {
 
     expect(
       (await web3.eth.getBalance(controller.address)) - balanceBefore,
-    ).to.equal(86400)
+    ).to.equal(0)
   })
 
   it('should allow token owners to renew a name', async () => {
@@ -651,7 +680,7 @@ contract('ETHRegistrarController', function () {
     expect(newFuses).to.equal(fuses)
     expect(
       (await web3.eth.getBalance(controller.address)) - balanceBefore,
-    ).to.equal(86400)
+    ).to.equal(0)
   })
 
   it('non wrapped names can renew', async () => {
@@ -700,7 +729,7 @@ contract('ETHRegistrarController', function () {
     )
     await controller.commit(commitment)
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await controller.register(
       'reverse',
       registrantAccount,
@@ -731,7 +760,7 @@ contract('ETHRegistrarController', function () {
     )
     await controller.commit(commitment)
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await controller.register(
       'noreverse',
       registrantAccount,
@@ -762,7 +791,7 @@ contract('ETHRegistrarController', function () {
     )
     await controller.commit(commitment)
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await controller.register(
       label,
       registrantAccount,
@@ -801,7 +830,7 @@ contract('ETHRegistrarController', function () {
     )
     await controller.commit(commitment)
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     const tx = await controller.register(
       label,
       registrantAccount,
@@ -843,7 +872,7 @@ contract('ETHRegistrarController', function () {
 
     await controller.commit(commitment)
 
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
 
     const gasA = await controller2.estimateGas.register(
       label,
@@ -932,10 +961,10 @@ contract('ETHRegistrarController', function () {
       0,
     )
     var tx = await controller.commit(commitment)
-    expect(await controller.commitments(commitment)).to.equal(
-      (await web3.eth.getBlock(tx.blockNumber)).timestamp,
-    )
-    await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
+    // expect(await controller.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
+    // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
       controller.register(
         label,

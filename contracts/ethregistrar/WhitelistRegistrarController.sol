@@ -151,10 +151,14 @@ contract WhitelistRegistrarController is
                 !SignatureChecker.isValidSignatureNow(
                     operator,
                     keccak256(
-                        abi.encode(
+                        abi.encodePacked(
+                            bytes1(0x19),
+                            bytes1(0),
                             address(this),
                             block.chainid,
-                            0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583, // keccak256("register")
+                            bytes32(
+                                0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583
+                            ), // keccak256("register")
                             commitment
                         )
                     ),
@@ -165,10 +169,14 @@ contract WhitelistRegistrarController is
                     !SignatureChecker.isValidSignatureNow(
                         operator,
                         keccak256(
-                            abi.encode(
+                            abi.encodePacked(
+                                bytes1(0x19),
+                                bytes1(0),
                                 address(this),
                                 block.chainid,
-                                0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c, // keccak256("takeover")
+                                bytes32(
+                                    0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c
+                                ), // keccak256("takeover")
                                 commitment
                             )
                         ),
@@ -231,10 +239,14 @@ contract WhitelistRegistrarController is
             bool signatureValid = SignatureChecker.isValidSignatureNow(
                 operator,
                 keccak256(
-                    abi.encode(
+                    abi.encodePacked(
+                        bytes1(0x19),
+                        bytes1(0),
                         address(this),
                         block.chainid,
-                        0xde0eadb8cc1e667dab2d95e011b2f2ae72a64de91e0b652eecb07930f6b2ffaa, // keccak256("renew")
+                        bytes32(
+                            0xde0eadb8cc1e667dab2d95e011b2f2ae72a64de91e0b652eecb07930f6b2ffaa
+                        ), // keccak256("renew")
                         labelhash,
                         expiration
                     )
