@@ -20,3 +20,4 @@ console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes(process.env.TLD)))
 
 console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('register')))
 console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('renew')))
+console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('takeover')))

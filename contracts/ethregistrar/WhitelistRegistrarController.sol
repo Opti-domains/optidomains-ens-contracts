@@ -147,20 +147,38 @@ contract WhitelistRegistrarController is
                 ownerControlledFuses
             );
 
-            bool signatureValid = SignatureChecker.isValidSignatureNow(
-                operator,
-                keccak256(
-                    abi.encode(
-                        address(this),
-                        block.chainid,
-                        0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583, // keccak256("register")
-                        commitment
+            if (
+                !SignatureChecker.isValidSignatureNow(
+                    operator,
+                    keccak256(
+                        abi.encode(
+                            address(this),
+                            block.chainid,
+                            0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583, // keccak256("register")
+                            commitment
+                        )
+                    ),
+                    operatorSignature
+                )
+            ) {
+                if (
+                    !SignatureChecker.isValidSignatureNow(
+                        operator,
+                        keccak256(
+                            abi.encode(
+                                address(this),
+                                block.chainid,
+                                0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c, // keccak256("takeover")
+                                commitment
+                            )
+                        ),
+                        operatorSignature
                     )
-                ),
-                operatorSignature
-            );
-            if (!signatureValid) {
-                revert InvalidOperatorSignature();
+                ) {
+                    revert InvalidOperatorSignature();
+                } else {
+                    base.setExpiry(uint256(keccak256(bytes(name))), 1);
+                }
             }
         }
 

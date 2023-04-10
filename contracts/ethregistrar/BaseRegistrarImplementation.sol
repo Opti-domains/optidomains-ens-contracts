@@ -31,6 +31,8 @@ contract BaseRegistrarImplementation is ERC721, IBaseRegistrar, Ownable {
         );
     bytes4 private constant RECLAIM_ID =
         bytes4(keccak256("reclaim(uint256,address)"));
+    bytes4 private constant SET_EXPIRY_ID =
+        bytes4(keccak256("setExpiry(uint256,uint256)"));
 
     /**
      * v2.1.3 version of _isApprovedOrOwner which calls ownerOf(tokenId) and takes grace period into consideration instead of ERC721.ownerOf(tokenId);
@@ -184,12 +186,22 @@ contract BaseRegistrarImplementation is ERC721, IBaseRegistrar, Ownable {
         ens.setSubnodeOwner(baseNode, bytes32(id), owner);
     }
 
+    function setExpiry(
+        uint256 id,
+        uint256 expiry
+    ) external live onlyController {
+        require(_exists(id));
+        expiries[id] = expiry;
+        emit NameRenewed(id, expiries[id]);
+    }
+
     function supportsInterface(
         bytes4 interfaceID
     ) public view override(ERC721, IERC165) returns (bool) {
         return
             interfaceID == INTERFACE_META_ID ||
             interfaceID == ERC721_ID ||
-            interfaceID == RECLAIM_ID;
+            interfaceID == RECLAIM_ID ||
+            interfaceID == SET_EXPIRY_ID;
     }
 }
