@@ -135,11 +135,21 @@ describe('Name Wrapper', () => {
       EnsRegistry.address,
       BaseRegistrar.address,
       MetaDataservice.address,
-      process.env.TLD,
+      'eth',
     )
     NameWrapper2 = NameWrapper.connect(signers[1])
     NameWrapperH = NameWrapper.connect(signers[2])
     NameWrapper3 = NameWrapperH
+
+    for (const nameWrapper of [
+      NameWrapper,
+      NameWrapper2,
+      NameWrapperH,
+      NameWrapper3,
+    ]) {
+      nameWrapper.safeTransferFrom =
+        nameWrapper['safeTransferFrom(address,address,uint256,uint256,bytes)']
+    }
 
     NameWrapperUpgraded = await deploy(
       'UpgradedNameWrapperMock',
@@ -256,7 +266,7 @@ describe('Name Wrapper', () => {
       await EnsRegistry.setApprovalForAll(NameWrapper.address, true)
       await expect(
         NameWrapper.wrap(encodeName('xyz'), EMPTY_ADDRESS, EMPTY_ADDRESS),
-      ).to.be.revertedWith('ERC1155: mint to the zero address')
+      ).to.be.revertedWith('MTZ' /*'ERC1155: mint to the zero address'*/)
     })
 
     it('Will not allow wrapping with a target address of the wrapper contract address.', async () => {
@@ -264,7 +274,7 @@ describe('Name Wrapper', () => {
       await expect(
         NameWrapper.wrap(encodeName('xyz'), NameWrapper.address, EMPTY_ADDRESS),
       ).to.be.revertedWith(
-        'ERC1155: newOwner cannot be the NameWrapper contract',
+        'NON' /*'ERC1155: newOwner cannot be the NameWrapper contract'*/,
       )
     })
 
@@ -1056,7 +1066,7 @@ describe('Name Wrapper', () => {
           CAN_DO_EVERYTHING,
           EMPTY_ADDRESS,
         ),
-      ).to.be.revertedWith('ERC1155: mint to the zero address')
+      ).to.be.revertedWith('MTZ' /*'ERC1155: mint to the zero address'*/)
     })
 
     it('Does not allow wrapping with a target address of the wrapper contract address.', async () => {
@@ -1071,7 +1081,7 @@ describe('Name Wrapper', () => {
           EMPTY_ADDRESS,
         ),
       ).to.be.revertedWith(
-        'ERC1155: newOwner cannot be the NameWrapper contract',
+        'NON' /*'ERC1155: newOwner cannot be the NameWrapper contract'*/,
       )
     })
 
@@ -1497,7 +1507,7 @@ describe('Name Wrapper', () => {
       await expect(
         NameWrapper2.approve(account3, wrappedTokenId),
       ).to.be.revertedWith(
-        'ERC721: approve caller is not token owner or approved for all',
+        'AC' /*'ERC721: approve caller is not token owner or approved for all'*/,
       )
     })
 
@@ -1505,7 +1515,7 @@ describe('Name Wrapper', () => {
       await expect(
         NameWrapper2.approve(account2, wrappedTokenId),
       ).to.be.revertedWith(
-        'ERC721: approve caller is not token owner or approved for all',
+        'AC' /*'ERC721: approve caller is not token owner or approved for all'*/,
       )
     })
 
@@ -1687,7 +1697,9 @@ describe('Name Wrapper', () => {
           1,
           '0x',
         ),
-      ).to.be.revertedWith(`ERC1155: caller is not owner nor approved`)
+      ).to.be.revertedWith(
+        'CNO' /*`ERC1155: caller is not owner nor approved`*/,
+      )
     })
 
     it('Approved address cannot transfer the name with setRecord()', async () => {
@@ -4367,7 +4379,7 @@ describe('Name Wrapper', () => {
           0,
           CAN_DO_EVERYTHING,
         ),
-      ).to.be.revertedWith('ERC1155: mint to the zero address')
+      ).to.be.revertedWith('MTZ' /*'ERC1155: mint to the zero address'*/)
     })
     it('Will not allow wrapping with a target address of the wrapper contract address', async () => {
       await expect(
@@ -4379,7 +4391,7 @@ describe('Name Wrapper', () => {
           0,
         ),
       ).to.be.revertedWith(
-        'ERC1155: newOwner cannot be the NameWrapper contract',
+        'NON' /*'ERC1155: newOwner cannot be the NameWrapper contract'*/,
       )
     })
     it('Does not allow anyone else to wrap a name even if the owner has authorised the wrapper with the ENS registry.', async () => {
@@ -4957,7 +4969,7 @@ describe('Name Wrapper', () => {
           0,
           0,
         ),
-      ).to.be.revertedWith('ERC1155: mint to the zero address')
+      ).to.be.revertedWith('MTZ' /*'ERC1155: mint to the zero address'*/)
     })
 
     it('Will not allow wrapping with a target address of the wrapper contract address.', async () => {
@@ -4972,7 +4984,7 @@ describe('Name Wrapper', () => {
           0,
         ),
       ).to.be.revertedWith(
-        'ERC1155: newOwner cannot be the NameWrapper contract',
+        'NON' /*'ERC1155: newOwner cannot be the NameWrapper contract'*/,
       )
     })
 
@@ -6136,7 +6148,7 @@ describe('Name Wrapper', () => {
           EMPTY_ADDRESS,
           CAN_DO_EVERYTHING,
         ),
-      ).to.be.revertedWith('ERC1155: mint to the zero address')
+      ).to.be.revertedWith('MTZ' /*'ERC1155: mint to the zero address'*/)
     })
 
     it('Does not allow wrapping with a target address of the wrapper contract address.', async () => {
@@ -6149,7 +6161,7 @@ describe('Name Wrapper', () => {
           CAN_DO_EVERYTHING,
         ),
       ).to.be.revertedWith(
-        'ERC1155: newOwner cannot be the NameWrapper contract',
+        'NON' /*'ERC1155: newOwner cannot be the NameWrapper contract'*/,
       )
     })
 
@@ -6768,7 +6780,9 @@ describe('Name Wrapper', () => {
           1,
           '0x',
         ),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
     })
 
     it('When a .eth name is in grace period it cannot call batchSafeTransferFrom', async () => {
@@ -6780,7 +6794,9 @@ describe('Name Wrapper', () => {
           [1],
           '0x',
         ),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
     })
 
     it('When a .eth name is in grace period it cannot call setResolver', async () => {
@@ -6925,7 +6941,9 @@ describe('Name Wrapper', () => {
       await registerSetupAndWrapName(label, account, CANNOT_UNWRAP)
       await expect(
         NameWrapperH.safeTransferFrom(hacker, account, wrappedTokenId, 1, '0x'),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
     })
 
     it('Approval on the Wrapper does not give permission to wrap the .eth name', async () => {
@@ -6960,7 +6978,9 @@ describe('Name Wrapper', () => {
           1,
           '0x',
         ),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
     })
 
     it('Approval on the Wrapper does not give permission to transfer after expiry', async () => {
@@ -6979,11 +6999,15 @@ describe('Name Wrapper', () => {
           1,
           '0x',
         ),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
 
       await expect(
         NameWrapperH.safeTransferFrom(account, hacker, wrappedTokenId, 1, '0x'),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
     })
 
     it('When emancipated names expire, they are untransferrible', async () => {
@@ -7008,7 +7032,9 @@ describe('Name Wrapper', () => {
           1,
           '0x',
         ),
-      ).to.be.revertedWith(`ERC1155: insufficient balance for transfer`)
+      ).to.be.revertedWith(
+        'IB' /*`ERC1155: insufficient balance for transfer`*/,
+      )
     })
 
     it('Returns a balance of 0 for expired names', async () => {

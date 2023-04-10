@@ -53,10 +53,11 @@ describe('ReverseClaimer', () => {
     )
 
     NameWrapper = await deploy(
-      'NameWrapper',
+      'OptiDomains',
       EnsRegistry.address,
       BaseRegistrar.address,
       MetaDataservice.address,
+      'eth',
     )
   })
 

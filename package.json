@@ -32,6 +32,7 @@
     "@types/mocha": "^9.1.1",
     "@types/node": "^18.0.0",
     "chai": "^4.3.4",
+    "chai-bignumber": "^3.1.0",
     "dotenv": "^10.0.0",
     "elliptic-solidity": "^1.0.0",
     "envfile": "^6.17.0",

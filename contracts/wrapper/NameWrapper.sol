@@ -918,7 +918,7 @@ abstract contract NameWrapper is
         if (expiry < block.timestamp) {
             // Transferable if the name was not emancipated
             if (fuses & PARENT_CANNOT_CONTROL != 0) {
-                revert("ERC1155: insufficient balance for transfer");
+                revert("IB");
             }
         } else {
             // Transferable if CANNOT_TRANSFER is unburned
