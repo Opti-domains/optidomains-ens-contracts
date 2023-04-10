@@ -20,10 +20,17 @@ const {
 
 const DAY = 24 * 60 * 60
 const REGISTRATION_TIME = 28 * DAY
-// const BUFFERED_REGISTRATION_COST = REGISTRATION_TIME + 3 * DAY
+const REGISTRATION_EXPIRATION =
+  Math.floor(Date.now() / 1000) + REGISTRATION_TIME
+// const BUFFERED_REGISTRATION_COST = REGISTRATION_EXPIRATION + 3 * DAY
 const BUFFERED_REGISTRATION_COST = 0
 const GRACE_PERIOD = 90 * DAY
 const NULL_ADDRESS = ZERO_ADDRESS
+
+const OPERATOR_PRIVATE_KEY =
+  '0x350eb01e05065a387df6c36c2fc290cf74cc5fbe2079f3a82c41e5dc7ffbae00'
+const OPERATOR_ADDRESS = '0x18d469c50C2481eCbC7F35e39E8AbA8f5862eEC3'
+
 contract('WhitelistRegistrarController', function () {
   let ens
   let resolver
@@ -43,27 +50,78 @@ contract('WhitelistRegistrarController', function () {
   let registrantAccount // Account that owns test names
   let accounts = []
 
-  async function registerSignature(commitment) {
+  function registerSignature(commitment, isTakeover = false) {
     // Define the input types and values of the transaction data
-    const inputTypes = ['bytes32', 'uint256', 'uint256']
-    const inputValues = [commitment, commitmentTimestamp, body.chainId]
-
-    console.log(inputValues)
+    const inputTypes = [
+      'bytes1',
+      'bytes1',
+      'address',
+      'uint256',
+      'bytes32',
+      'bytes32',
+    ]
+    const inputValues = [
+      '0x19',
+      '0x00',
+      controller.address,
+      body.chainId,
+      isTakeover
+        ? '0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c'
+        : '0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583',
+      commitment,
+    ]
 
     // ABI-encode the transaction data
-    const abiEncodedTransactionData = ethers.utils.defaultAbiCoder.encode(
-      inputTypes,
-      inputValues,
+    const digest = ethers.utils.solidityKeccak256(inputTypes, inputValues)
+
+    const signingKey = new ethers.utils.SigningKey(OPERATOR_PRIVATE_KEY)
+    const signature = signingKey.signDigest(digest)
+
+    return ethers.utils.hexlify(
+      ethers.utils.concat([
+        signature.r,
+        signature.s,
+        ethers.utils.hexlify(signature.v),
+      ]),
     )
+  }
 
-    console.log(ethers.utils.keccak256(abiEncodedTransactionData))
+  function renewSignature(name, expiration) {
+    const labelHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(name))
 
-    const signingKey = new ethers.utils.SigningKey(privateKey)
-    const signature = signingKey.signDigest(
-      ethers.utils.keccak256(abiEncodedTransactionData),
+    // Define the input types and values of the transaction data
+    const inputTypes = [
+      'bytes1',
+      'bytes1',
+      'address',
+      'uint256',
+      'bytes32',
+      'bytes32',
+      'uint256',
+    ]
+    const inputValues = [
+      '0x19',
+      '0x00',
+      controller.address,
+      body.chainId,
+      '0xde0eadb8cc1e667dab2d95e011b2f2ae72a64de91e0b652eecb07930f6b2ffaa',
+      labelHash,
+      expiration,
+    ]
+
+    // ABI-encode the transaction data
+    const digest = ethers.utils.solidityKeccak256(inputTypes, inputValues)
+
+    const signingKey = new ethers.utils.SigningKey(OPERATOR_PRIVATE_KEY)
+    const signature = signingKey.signDigest(digest)
+
+    return ethers.utils.hexlify(
+      ethers.utils.concat([
+        signature.r,
+        signature.s,
+        ethers.utils.hexlify(signature.v),
+      ]),
     )
-
-    console.log(signature)
   }
 
   async function registerName(
@@ -73,7 +131,7 @@ contract('WhitelistRegistrarController', function () {
     var commitment = await controller.makeCommitment(
       name,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       NULL_ADDRESS,
       [],
@@ -90,12 +148,13 @@ contract('WhitelistRegistrarController', function () {
     var tx = await controller.register(
       name,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       NULL_ADDRESS,
       [],
       false,
       0,
+      registerSignature(commitment),
       txOptions,
     )
 
@@ -127,10 +186,11 @@ contract('WhitelistRegistrarController', function () {
     )
 
     nameWrapper = await deploy(
-      'NameWrapper',
+      'OptiDomains',
       ens.address,
       baseRegistrar.address,
       ownerAccount,
+      'eth',
     )
 
     await ens.setSubnodeOwner(EMPTY_BYTES, sha3('eth'), baseRegistrar.address)
@@ -146,7 +206,7 @@ contract('WhitelistRegistrarController', function () {
       baseRegistrar.address,
       reverseRegistrar.address,
       nameWrapper.address,
-      ownerAccount,
+      OPERATOR_ADDRESS,
       0,
       'eth',
     )
@@ -234,9 +294,9 @@ contract('WhitelistRegistrarController', function () {
         name,
         sha3(name),
         registrantAccount,
-        REGISTRATION_TIME,
         0,
-        block.timestamp + REGISTRATION_TIME,
+        0,
+        REGISTRATION_EXPIRATION,
       )
 
     expect(
@@ -260,7 +320,7 @@ contract('WhitelistRegistrarController', function () {
     var commitment = await controller2.makeCommitment(
       'newconfigname',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       callData,
@@ -277,7 +337,7 @@ contract('WhitelistRegistrarController', function () {
     var tx = await controller2.register(
       'newconfigname',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       callData,
@@ -294,9 +354,9 @@ contract('WhitelistRegistrarController', function () {
         'newconfigname',
         sha3('newconfigname'),
         registrantAccount,
-        REGISTRATION_TIME,
         0,
-        block.timestamp + REGISTRATION_TIME,
+        0,
+        REGISTRATION_EXPIRATION,
       )
 
     expect(
@@ -321,7 +381,7 @@ contract('WhitelistRegistrarController', function () {
       controller.makeCommitment(
         'newconfigname',
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         NULL_ADDRESS,
         callData,
@@ -335,7 +395,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       'newconfigname',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       registrantAccount,
       callData,
@@ -353,7 +413,7 @@ contract('WhitelistRegistrarController', function () {
       controller.register(
         'newconfigname',
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         registrantAccount,
         callData,
@@ -368,7 +428,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       'newconfigname',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       controller.address,
       callData,
@@ -386,7 +446,7 @@ contract('WhitelistRegistrarController', function () {
       controller.register(
         'newconfigname',
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         controller.address,
         callData,
@@ -403,7 +463,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller2.makeCommitment(
       'awesome',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [
@@ -426,7 +486,7 @@ contract('WhitelistRegistrarController', function () {
       controller2.register(
         'awesome',
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         resolver.address,
         [
@@ -446,7 +506,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller2.makeCommitment(
       'awesome',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [
@@ -473,7 +533,7 @@ contract('WhitelistRegistrarController', function () {
       controller2.register(
         'awesome',
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         resolver.address,
         [
@@ -497,7 +557,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       'newconfigname2',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -514,7 +574,7 @@ contract('WhitelistRegistrarController', function () {
     let tx2 = await controller.register(
       'newconfigname2',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -531,9 +591,9 @@ contract('WhitelistRegistrarController', function () {
         'newconfigname2',
         sha3('newconfigname2'),
         registrantAccount,
-        REGISTRATION_TIME,
         0,
-        block.timestamp + REGISTRATION_TIME,
+        0,
+        REGISTRATION_EXPIRATION,
       )
 
     const nodehash = namehash('newconfigname2.eth')
@@ -549,7 +609,7 @@ contract('WhitelistRegistrarController', function () {
       await controller.makeCommitment(
         'newname2',
         accounts[2],
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         NULL_ADDRESS,
         [],
@@ -563,7 +623,7 @@ contract('WhitelistRegistrarController', function () {
       controller.register(
         'newname2',
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         NULL_ADDRESS,
         [],
@@ -583,7 +643,7 @@ contract('WhitelistRegistrarController', function () {
       await controller.makeCommitment(
         label,
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         NULL_ADDRESS,
         [],
@@ -597,7 +657,7 @@ contract('WhitelistRegistrarController', function () {
       controller.register(
         label,
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         NULL_ADDRESS,
         [],
@@ -614,7 +674,7 @@ contract('WhitelistRegistrarController', function () {
   //   const commitment = await controller.makeCommitment(
   //     'newname2',
   //     registrantAccount,
-  //     REGISTRATION_TIME,
+  //     REGISTRATION_EXPIRATION,
   //     secret,
   //     NULL_ADDRESS,
   //     [],
@@ -628,7 +688,7 @@ contract('WhitelistRegistrarController', function () {
   //     controller.register(
   //       'newname2',
   //       registrantAccount,
-  //       REGISTRATION_TIME,
+  //       REGISTRATION_EXPIRATION,
   //       secret,
   //       NULL_ADDRESS,
   //       [],
@@ -720,7 +780,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       'reverse',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -733,7 +793,7 @@ contract('WhitelistRegistrarController', function () {
     await controller.register(
       'reverse',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -751,7 +811,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       'noreverse',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -764,7 +824,7 @@ contract('WhitelistRegistrarController', function () {
     await controller.register(
       'noreverse',
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -782,7 +842,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -795,7 +855,7 @@ contract('WhitelistRegistrarController', function () {
     await controller.register(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -821,7 +881,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -834,7 +894,7 @@ contract('WhitelistRegistrarController', function () {
     const tx = await controller.register(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [],
@@ -847,7 +907,7 @@ contract('WhitelistRegistrarController', function () {
 
     const [, fuses, expiry] = await nameWrapper.getData(namehash(name))
     expect(fuses).to.equal(PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | IS_DOT_ETH)
-    expect(expiry).to.equal(REGISTRATION_TIME + GRACE_PERIOD + block.timestamp)
+    expect(expiry).to.equal(REGISTRATION_EXPIRATION + GRACE_PERIOD)
   })
 
   it('approval should reduce gas for registration', async () => {
@@ -857,7 +917,7 @@ contract('WhitelistRegistrarController', function () {
     const commitment = await controller.makeCommitment(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [
@@ -877,7 +937,7 @@ contract('WhitelistRegistrarController', function () {
     const gasA = await controller2.estimateGas.register(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver.address,
       [
@@ -896,7 +956,7 @@ contract('WhitelistRegistrarController', function () {
     const gasB = await controller2.estimateGas.register(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver2.address,
       [
@@ -913,7 +973,7 @@ contract('WhitelistRegistrarController', function () {
     const tx = await controller2.register(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       resolver2.address,
       [
@@ -953,7 +1013,7 @@ contract('WhitelistRegistrarController', function () {
     var commitment = await controller.makeCommitment(
       label,
       registrantAccount,
-      REGISTRATION_TIME,
+      REGISTRATION_EXPIRATION,
       secret,
       baseRegistrar.address,
       callData,
@@ -969,7 +1029,7 @@ contract('WhitelistRegistrarController', function () {
       controller.register(
         label,
         registrantAccount,
-        REGISTRATION_TIME,
+        REGISTRATION_EXPIRATION,
         secret,
         baseRegistrar.address,
         callData,
