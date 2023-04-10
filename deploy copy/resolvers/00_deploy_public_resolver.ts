@@ -8,11 +8,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer, owner } = await getNamedAccounts()
 
   const registry = await ethers.getContract('ENSRegistry', owner)
-  const nameWrapper = await ethers.getContract('OptiDomains', owner)
-  const controller = await ethers.getContract(
-    'WhitelistRegistrarController',
-    owner,
-  )
+  const nameWrapper = await ethers.getContract('NameWrapper', owner)
+  const controller = await ethers.getContract('ETHRegistrarController', owner)
   const reverseRegistrar = await ethers.getContract('ReverseRegistrar', owner)
 
   const deployArgs = {

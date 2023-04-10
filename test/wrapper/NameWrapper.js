@@ -131,10 +131,11 @@ describe('Name Wrapper', () => {
     await ReverseRegistrar.setDefaultResolver(Resolver.address)
 
     NameWrapper = await deploy(
-      'NameWrapper',
+      'OptiDomains',
       EnsRegistry.address,
       BaseRegistrar.address,
       MetaDataservice.address,
+      process.env.TLD,
     )
     NameWrapper2 = NameWrapper.connect(signers[1])
     NameWrapperH = NameWrapper.connect(signers[2])

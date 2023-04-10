@@ -21,24 +21,19 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     'BaseRegistrarImplementation',
     owner,
   )
-  const metadata = await ethers.getContract('OptiDomainsMetadataService', owner)
+  const metadata = await ethers.getContract('StaticMetadataService', owner)
 
   const deployArgs = {
     from: deployer,
-    args: [
-      registry.address,
-      registrar.address,
-      metadata.address,
-      process.env.TLD,
-    ],
+    args: [registry.address, registrar.address, metadata.address],
     log: true,
   }
 
-  const nameWrapper = await deploy('OptiDomains', deployArgs)
+  const nameWrapper = await deploy('NameWrapper', deployArgs)
   if (!nameWrapper.newlyDeployed) return
 
   if (owner !== deployer) {
-    const wrapper = await ethers.getContract('OptiDomains', deployer)
+    const wrapper = await ethers.getContract('NameWrapper', deployer)
     const tx = await wrapper.transferOwnership(owner)
     console.log(
       `Transferring ownership of NameWrapper to ${owner} (tx: ${tx.hash})...`,
@@ -61,7 +56,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     ethers.provider.connection.url,
     { ...ethers.provider.network, ensAddress: registry.address },
   )
-  const resolver = await providerWithEns.getResolver(process.env.TLD!)
+  const resolver = await providerWithEns.getResolver('eth')
   if (resolver === null) {
     console.log(
       `No resolver set for .eth; not setting interface ${interfaceId} for NameWrapper`,
@@ -73,7 +68,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     resolver.address,
   )
   const tx3 = await resolverContract.setInterface(
-    ethers.utils.namehash(process.env.TLD!),
+    ethers.utils.namehash('eth'),
     interfaceId,
     nameWrapper.address,
   )
@@ -87,7 +82,7 @@ func.id = 'name-wrapper'
 func.tags = ['wrapper', 'NameWrapper']
 func.dependencies = [
   'BaseRegistrarImplementation',
-  'OptiDomainsMetadataService',
+  'StaticMetadataService',
   'registry',
 ]
 

@@ -18,7 +18,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const deployArgs = {
     from: deployer,
-    args: [registry.address, namehash.hash(process.env.TLD!)],
+    args: [registry.address, namehash.hash('eth')],
     log: true,
   }
 
@@ -35,11 +35,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const tx2 = await root
     .connect(await ethers.getSigner(owner))
-    .setSubnodeOwner('0x' + keccak256(process.env.TLD!), registrar.address)
+    .setSubnodeOwner('0x' + keccak256('eth'), registrar.address)
   console.log(
-    `Setting owner of ${process.env.TLD!} node to registrar on root (tx: ${
-      tx2.hash
-    })...`,
+    `Setting owner of eth node to registrar on root (tx: ${tx2.hash})...`,
   )
   await tx2.wait()
 }

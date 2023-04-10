@@ -13,9 +13,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     metadataHost = 'http://localhost:8080'
   }
 
-  const metadataUrl = `${metadataHost}/name/`
+  const metadataUrl = `${metadataHost}/name/0x{id}`
 
-  await deploy('OptiDomainsMetadataService', {
+  await deploy('StaticMetadataService', {
     from: deployer,
     args: [metadataUrl],
     log: true,
@@ -23,7 +23,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 }
 
 func.id = 'metadata'
-func.tags = ['wrapper', 'OptiDomainsMetadataService']
+func.tags = ['wrapper', 'StaticMetadataService']
 func.dependencies = []
 
 export default func

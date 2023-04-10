@@ -41,7 +41,7 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       saveDeployments: false,
-      tags: ['test', 'legacy', 'use_root'],
+      tags: ['test', 'use_root'],
       allowUnlimitedContractSize: false,
     },
     localhost: {
