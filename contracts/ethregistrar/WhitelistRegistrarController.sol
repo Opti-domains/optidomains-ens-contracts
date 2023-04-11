@@ -135,11 +135,15 @@ contract WhitelistRegistrarController is
         uint16 ownerControlledFuses,
         bytes calldata operatorSignature
     ) public payable override {
+        if (!available(name)) {
+            revert NameNotAvailable(name);
+        }
+
         {
             bytes32 commitment = makeCommitment(
                 name,
                 owner,
-                expiration - block.timestamp,
+                expiration,
                 secret,
                 resolver,
                 data,
@@ -155,7 +159,7 @@ contract WhitelistRegistrarController is
                             bytes1(0x19),
                             bytes1(0),
                             address(this),
-                            block.chainid,
+                            uint256(block.chainid),
                             bytes32(
                                 0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583
                             ), // keccak256("register")
@@ -173,7 +177,7 @@ contract WhitelistRegistrarController is
                                 bytes1(0x19),
                                 bytes1(0),
                                 address(this),
-                                block.chainid,
+                                uint256(block.chainid),
                                 bytes32(
                                     0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c
                                 ), // keccak256("takeover")
@@ -230,8 +234,9 @@ contract WhitelistRegistrarController is
     ) external override {
         bytes32 labelhash = keccak256(bytes(name));
         uint256 tokenId = uint256(labelhash);
+        uint256 oldExpires = base.nameExpires(tokenId);
 
-        if (expiration <= base.nameExpires(tokenId)) {
+        if (expiration <= oldExpires) {
             revert NegativeDuration();
         }
 
@@ -243,7 +248,7 @@ contract WhitelistRegistrarController is
                         bytes1(0x19),
                         bytes1(0),
                         address(this),
-                        block.chainid,
+                        uint256(block.chainid),
                         bytes32(
                             0xde0eadb8cc1e667dab2d95e011b2f2ae72a64de91e0b652eecb07930f6b2ffaa
                         ), // keccak256("renew")
@@ -258,10 +263,7 @@ contract WhitelistRegistrarController is
             }
         }
 
-        uint256 expires = nameWrapper.renew(
-            tokenId,
-            expiration - block.timestamp
-        );
+        uint256 expires = nameWrapper.renew(tokenId, expiration - oldExpires);
 
         emit NameRenewed(name, labelhash, 0, expires);
     }

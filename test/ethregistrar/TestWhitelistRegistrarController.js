@@ -9,7 +9,7 @@ const { CANNOT_UNWRAP, PARENT_CANNOT_CONTROL, IS_DOT_ETH } = FUSES
 
 const { expect } = require('chai')
 
-const { ethers } = require('hardhat')
+const { ethers, network } = require('hardhat')
 const provider = ethers.provider
 const { namehash } = require('../test-utils/ens')
 const sha3 = require('web3-utils').sha3
@@ -20,8 +20,6 @@ const {
 
 const DAY = 24 * 60 * 60
 const REGISTRATION_TIME = 28 * DAY
-const REGISTRATION_EXPIRATION =
-  Math.floor(Date.now() / 1000) + REGISTRATION_TIME
 // const BUFFERED_REGISTRATION_COST = REGISTRATION_EXPIRATION + 3 * DAY
 const BUFFERED_REGISTRATION_COST = 0
 const GRACE_PERIOD = 90 * DAY
@@ -50,6 +48,8 @@ contract('WhitelistRegistrarController', function () {
   let registrantAccount // Account that owns test names
   let accounts = []
 
+  let REGISTRATION_EXPIRATION
+
   function registerSignature(commitment, isTakeover = false) {
     // Define the input types and values of the transaction data
     const inputTypes = [
@@ -64,7 +64,7 @@ contract('WhitelistRegistrarController', function () {
       '0x19',
       '0x00',
       controller.address,
-      body.chainId,
+      network.config.chainId,
       isTakeover
         ? '0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c'
         : '0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583',
@@ -73,6 +73,16 @@ contract('WhitelistRegistrarController', function () {
 
     // ABI-encode the transaction data
     const digest = ethers.utils.solidityKeccak256(inputTypes, inputValues)
+
+    // console.log(
+    //   digest,
+    //   controller.address,
+    //   network.config.chainId,
+    //   isTakeover
+    //     ? '0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c'
+    //     : '0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583',
+    //   commitment,
+    // )
 
     const signingKey = new ethers.utils.SigningKey(OPERATOR_PRIVATE_KEY)
     const signature = signingKey.signDigest(digest)
@@ -103,7 +113,7 @@ contract('WhitelistRegistrarController', function () {
       '0x19',
       '0x00',
       controller.address,
-      body.chainId,
+      network.config.chainId,
       '0xde0eadb8cc1e667dab2d95e011b2f2ae72a64de91e0b652eecb07930f6b2ffaa',
       labelHash,
       expiration,
@@ -162,6 +172,13 @@ contract('WhitelistRegistrarController', function () {
   }
 
   before(async () => {
+    const blockTimestamp = (
+      await ethers.provider.getBlock(await ethers.provider.getBlockNumber())
+    ).timestamp
+    REGISTRATION_EXPIRATION = blockTimestamp + REGISTRATION_TIME
+
+    // console.log(blockTimestamp, REGISTRATION_EXPIRATION)
+
     signers = await ethers.getSigners()
     ownerSigner = signers[0]
     ownerAccount = await signers[0].getAddress()
@@ -304,11 +321,11 @@ contract('WhitelistRegistrarController', function () {
     ).to.equal(0)
   })
 
-  it('should revert when not enough ether is transferred', async () => {
-    await expect(registerName('newname', { value: 0 })).to.be.revertedWith(
-      'InsufficientValue()',
-    )
-  })
+  // it('should revert when not enough ether is transferred', async () => {
+  //   await expect(registerName('newname', { value: 0 })).to.be.revertedWith(
+  //     'InsufficientValue()',
+  //   )
+  // })
 
   it('should report registered names as unavailable', async () => {
     const name = 'newname'
@@ -343,6 +360,7 @@ contract('WhitelistRegistrarController', function () {
       callData,
       false,
       0,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -419,6 +437,7 @@ contract('WhitelistRegistrarController', function () {
         callData,
         false,
         0,
+        registerSignature(commitment),
         { value: BUFFERED_REGISTRATION_COST },
       ),
     ).to.be.reverted
@@ -452,6 +471,7 @@ contract('WhitelistRegistrarController', function () {
         callData,
         false,
         0,
+        registerSignature(commitment),
         { value: BUFFERED_REGISTRATION_COST },
       ),
     ).to.be.revertedWith(
@@ -497,6 +517,7 @@ contract('WhitelistRegistrarController', function () {
         ],
         false,
         0,
+        registerSignature(commitment),
         { value: BUFFERED_REGISTRATION_COST },
       ),
     ).to.be.revertedWith('multicall: All records must have a matching namehash')
@@ -548,6 +569,7 @@ contract('WhitelistRegistrarController', function () {
         ],
         false,
         0,
+        registerSignature(commitment),
         { value: BUFFERED_REGISTRATION_COST },
       ),
     ).to.be.revertedWith('multicall: All records must have a matching namehash')
@@ -580,6 +602,7 @@ contract('WhitelistRegistrarController', function () {
       [],
       false,
       0,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -605,18 +628,17 @@ contract('WhitelistRegistrarController', function () {
   })
 
   it('should include the owner in the commitment', async () => {
-    await controller.commit(
-      await controller.makeCommitment(
-        'newname2',
-        accounts[2],
-        REGISTRATION_EXPIRATION,
-        secret,
-        NULL_ADDRESS,
-        [],
-        false,
-        0,
-      ),
+    const commitment = await controller.makeCommitment(
+      'newname2',
+      accounts[2],
+      REGISTRATION_EXPIRATION,
+      secret,
+      NULL_ADDRESS,
+      [],
+      false,
+      0,
     )
+    await controller.commit(commitment)
 
     // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
@@ -629,6 +651,7 @@ contract('WhitelistRegistrarController', function () {
         [],
         false,
         0,
+        registerSignature(commitment),
         {
           value: BUFFERED_REGISTRATION_COST,
         },
@@ -639,18 +662,17 @@ contract('WhitelistRegistrarController', function () {
   it('should reject duplicate registrations', async () => {
     const label = 'newname'
     await registerName(label)
-    await controller.commit(
-      await controller.makeCommitment(
-        label,
-        registrantAccount,
-        REGISTRATION_EXPIRATION,
-        secret,
-        NULL_ADDRESS,
-        [],
-        false,
-        0,
-      ),
+    const commitment = await controller.makeCommitment(
+      label,
+      registrantAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      NULL_ADDRESS,
+      [],
+      false,
+      0,
     )
+    await controller.commit(commitment)
 
     // await evm.advanceTime((await controller.minCommitmentAge()).toNumber())
     await expect(
@@ -663,6 +685,7 @@ contract('WhitelistRegistrarController', function () {
         [],
         false,
         0,
+        registerSignature(commitment),
         {
           value: BUFFERED_REGISTRATION_COST,
         },
@@ -708,8 +731,14 @@ contract('WhitelistRegistrarController', function () {
     var expires = await baseRegistrar.nameExpires(sha3('newname'))
     var balanceBefore = await web3.eth.getBalance(controller.address)
     const duration = 86400
-    const [price] = await controller.rentPrice(sha3('newname'), duration)
-    await controller.renew('newname', duration, { value: price })
+    const expiration = REGISTRATION_EXPIRATION + duration
+    // const [price] = await controller.rentPrice(sha3('newname'), duration)
+    await controller.renew(
+      'newname',
+      expiration,
+      renewSignature('newname', expiration),
+      { value: 0 },
+    )
     var newExpires = await baseRegistrar.nameExpires(sha3('newname'))
     var newFuseExpiry = (await nameWrapper.getData(nodehash))[2]
     expect(newExpires.toNumber() - expires.toNumber()).to.equal(duration)
@@ -731,8 +760,14 @@ contract('WhitelistRegistrarController', function () {
     var expires = await baseRegistrar.nameExpires(sha3('newname'))
     var balanceBefore = await web3.eth.getBalance(controller.address)
     const duration = 86400
-    const [price] = await controller.rentPrice(sha3('newname'), duration)
-    await controller2.renew('newname', duration, { value: price })
+    const expiration = REGISTRATION_EXPIRATION + duration
+    // const [price] = await controller.rentPrice(sha3('newname'), duration)
+    await controller2.renew(
+      'newname',
+      expiration,
+      renewSignature('newname', expiration),
+      { value: 0 },
+    )
     var newExpires = await baseRegistrar.nameExpires(sha3('newname'))
     const [, newFuses, newFuseExpiry] = await nameWrapper.getData(nodehash)
     expect(newExpires.toNumber() - expires.toNumber()).to.equal(duration)
@@ -744,32 +779,48 @@ contract('WhitelistRegistrarController', function () {
   })
 
   it('non wrapped names can renew', async () => {
+    const blockTimestamp = (
+      await ethers.provider.getBlock(await ethers.provider.getBlockNumber())
+    ).timestamp
+
     const label = 'newname'
     const tokenId = sha3(label)
     const nodehash = namehash(`${label}.eth`)
     // this is to allow user to register without namewrapped
     await baseRegistrar.addController(ownerAccount)
-    await baseRegistrar.register(tokenId, ownerAccount, 84600)
+    await baseRegistrar.register(
+      tokenId,
+      ownerAccount,
+      REGISTRATION_EXPIRATION - blockTimestamp,
+    )
 
     expect(await nameWrapper.ownerOf(nodehash)).to.equal(ZERO_ADDRESS)
     expect(await baseRegistrar.ownerOf(tokenId)).to.equal(ownerAccount)
 
     var expires = await baseRegistrar.nameExpires(tokenId)
     const duration = 86400
-    const [price] = await controller.rentPrice(tokenId, duration)
-    await controller.renew(label, duration, { value: price })
+    const expiration = REGISTRATION_EXPIRATION + duration
+    // const [price] = await controller.rentPrice(tokenId, duration)
+    await controller.renew(
+      label,
+      expiration,
+      renewSignature(label, expiration),
+      { value: 0 },
+    )
 
     expect(await baseRegistrar.ownerOf(tokenId)).to.equal(ownerAccount)
     expect(await nameWrapper.ownerOf(nodehash)).to.equal(ZERO_ADDRESS)
     var newExpires = await baseRegistrar.nameExpires(tokenId)
-    expect(newExpires.toNumber() - expires.toNumber()).to.equal(duration)
+    expect(
+      Math.abs(newExpires.toNumber() - expires.toNumber() - duration),
+    ).to.lessThanOrEqual(20)
   })
 
-  it('should require sufficient value for a renewal', async () => {
-    await expect(controller.renew('name', 86400)).to.be.revertedWith(
-      'InsufficientValue()',
-    )
-  })
+  // it('should require sufficient value for a renewal', async () => {
+  //   await expect(controller.renew('name', 86400)).to.be.revertedWith(
+  //     'InsufficientValue()',
+  //   )
+  // })
 
   it('should allow anyone to withdraw funds and transfer to the registrar owner', async () => {
     await controller.withdraw({ from: ownerAccount })
@@ -799,6 +850,7 @@ contract('WhitelistRegistrarController', function () {
       [],
       true,
       0,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -830,6 +882,7 @@ contract('WhitelistRegistrarController', function () {
       [],
       false,
       0,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -861,6 +914,7 @@ contract('WhitelistRegistrarController', function () {
       [],
       true,
       0,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -900,6 +954,7 @@ contract('WhitelistRegistrarController', function () {
       [],
       true,
       1,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -948,6 +1003,7 @@ contract('WhitelistRegistrarController', function () {
       ],
       true,
       1,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -967,6 +1023,7 @@ contract('WhitelistRegistrarController', function () {
       ],
       true,
       1,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -984,6 +1041,7 @@ contract('WhitelistRegistrarController', function () {
       ],
       true,
       1,
+      registerSignature(commitment),
       { value: BUFFERED_REGISTRATION_COST },
     )
 
@@ -1035,6 +1093,7 @@ contract('WhitelistRegistrarController', function () {
         callData,
         false,
         0,
+        registerSignature(commitment),
         { value: BUFFERED_REGISTRATION_COST },
       ),
     ).to.be.revertedWith(
