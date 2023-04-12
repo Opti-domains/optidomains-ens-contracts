@@ -23,9 +23,11 @@ contract SupporterPlan is Ownable, ISupporterPlan {
     event NewSupporter(bytes32 indexed namehash, string name, uint256 price);
 
     function buy(string memory name) external payable {
+        require(enabled, "New supporters closed");
+
         uint256 price = basePrice + (totalSupporter * 1 ether) / 1000000;
 
-        require(msg.value > price, "Not enough ETH");
+        require(msg.value >= price, "Not enough ETH");
 
         bytes32 namehash = keccak256(
             abi.encodePacked(ethNode, keccak256(bytes(name)))

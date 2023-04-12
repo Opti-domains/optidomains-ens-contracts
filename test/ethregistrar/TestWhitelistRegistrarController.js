@@ -18,6 +18,7 @@ const {
   EMPTY_BYTES32: EMPTY_BYTES,
   EMPTY_ADDRESS: ZERO_ADDRESS,
 } = require('../test-utils/constants')
+const { BigNumber } = require('ethers')
 
 const DAY = 24 * 60 * 60
 const REGISTRATION_TIME = 28 * DAY
@@ -1335,5 +1336,111 @@ contract('WhitelistRegistrarController', function () {
           registrantAccount,
         ),
     ).to.be.revertedWith(`OperationProhibited("${newconfig_namehash}")`)
+  })
+
+  // Test supporter plan
+  it('Should accept supporter fund if it is set', async () => {
+    // Deploy supporter
+    const supporterPlan = await deploy(
+      'SupporterPlan',
+      ethers.utils.parseEther('0.002'),
+      namehash('eth'),
+    )
+
+    // If no supporter -> donate ETH to the registrar
+    await (
+      await registerName('nosupporter', {
+        value: ethers.utils.parseEther('0.002'),
+      })
+    ).wait()
+    expect(await web3.eth.getBalance(controller.address)).to.equal(
+      ethers.utils.parseEther('0.002'),
+    )
+
+    // Register supporter
+    await (await controller.setSupporterPlan(supporterPlan.address)).wait()
+    expect(await controller.supporterPlan()).to.equal(supporterPlan.address)
+
+    const assertSupporter = async (name, supporterBalance, isSupporter) => {
+      expect(await web3.eth.getBalance(controller.address)).to.equal(
+        ethers.utils.parseEther('0.002'),
+      )
+      expect(await web3.eth.getBalance(supporterPlan.address)).to.equal(
+        ethers.utils.parseEther(supporterBalance),
+      )
+      expect(await supporterPlan.supporter(name)).to.equal(isSupporter)
+      expect(
+        await supporterPlan.supporterNamehash(namehash(name + '.eth')),
+      ).to.equal(isSupporter)
+      expect(await supporterPlan.supporterLabelhash(labelhash(name))).to.equal(
+        isSupporter,
+      )
+    }
+
+    // If supporter but don't buy -> not a supporter
+    await (await registerName('notsupport')).wait()
+    await assertSupporter('notsupport', '0', false)
+
+    // If supporter and buy -> become a supporter
+    await (
+      await registerName('supporter1', {
+        value: ethers.utils.parseEther('0.002'),
+      })
+    ).wait()
+    await assertSupporter('supporter1', '0.002', true)
+
+    expect(
+      registerName('supporter2', { value: ethers.utils.parseEther('0.002') }),
+    ).to.be.revertedWith('Not enough ETH')
+    await assertSupporter('supporter2', '0.002', false)
+
+    await (
+      await registerName('supporter2', {
+        value: ethers.utils.parseEther('0.002001'),
+      })
+    ).wait()
+    await assertSupporter('supporter2', '0.004001', true)
+
+    await (
+      await registerName('supporter3', {
+        value: ethers.utils.parseEther('0.0025'),
+      })
+    ).wait()
+    await assertSupporter('supporter3', '0.006501', true)
+
+    // Disable it
+    await (await supporterPlan.toggleEnabled(false)).wait()
+
+    // Nobody can support anymore
+    expect(
+      registerName('supporter4', { value: ethers.utils.parseEther('0.0025') }),
+    ).to.be.revertedWith('New supporters closed')
+
+    await (await registerName('notsupport2')).wait()
+    await assertSupporter('notsupport2', '0.006501', false)
+
+    // Enable it
+    await (await supporterPlan.toggleEnabled(true)).wait()
+
+    // Supporter comes in again
+    await (
+      await registerName('supporter4', {
+        value: ethers.utils.parseEther('0.0025'),
+      })
+    ).wait()
+    await assertSupporter('supporter4', '0.009001', true)
+
+    // Transfer ownership (Use registrantAccount because ownerAccount paid gas fee)
+    await (await supporterPlan.transferOwnership(registrantAccount)).wait()
+
+    // Supporter owner can withdraw fund
+    const ownerBalanceBefore = await web3.eth.getBalance(registrantAccount)
+    await (await supporterPlan.withdraw()).wait()
+    const ownerBalanceAfter = await web3.eth.getBalance(registrantAccount)
+    expect(
+      BigNumber.from(ownerBalanceAfter)
+        .sub(BigNumber.from(ownerBalanceBefore))
+        .toString(),
+    ).to.equal(ethers.utils.parseEther('0.009001'))
   })
 })
