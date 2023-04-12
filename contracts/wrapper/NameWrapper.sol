@@ -11,6 +11,7 @@ import {IReverseRegistrar} from "../reverseRegistrar/IReverseRegistrar.sol";
 import {ReverseClaimer} from "../reverseRegistrar/ReverseClaimer.sol";
 import {IBaseRegistrar} from "../ethregistrar/IBaseRegistrar.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {BytesUtils} from "./BytesUtils.sol";
@@ -93,6 +94,7 @@ abstract contract NameWrapper is
         return
             interfaceId == type(INameWrapper).interfaceId ||
             interfaceId == type(IERC721Receiver).interfaceId ||
+            interfaceId == type(IERC721).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 

@@ -71,6 +71,8 @@ function shouldBehaveLikeERC1155(
     for (const x of [token, tokenMultiTokenHolder, tokenProxy]) {
       x.safeTransferFrom =
         x['safeTransferFrom(address,address,uint256,uint256,bytes)']
+
+      x.balanceOf = x['balanceOf(address,uint256)']
     }
   })
 

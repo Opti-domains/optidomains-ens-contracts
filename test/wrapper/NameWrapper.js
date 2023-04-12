@@ -149,6 +149,8 @@ describe('Name Wrapper', () => {
     ]) {
       nameWrapper.safeTransferFrom =
         nameWrapper['safeTransferFrom(address,address,uint256,uint256,bytes)']
+
+      nameWrapper.balanceOf = nameWrapper['balanceOf(address,uint256)']
     }
 
     NameWrapperUpgraded = await deploy(
@@ -210,7 +212,7 @@ describe('Name Wrapper', () => {
 
   shouldSupportInterfaces(
     () => NameWrapper,
-    ['INameWrapper', 'IERC721Receiver'],
+    ['INameWrapper', 'IERC721Receiver', 'ERC721'],
   )
 
   shouldRespectConstraints(

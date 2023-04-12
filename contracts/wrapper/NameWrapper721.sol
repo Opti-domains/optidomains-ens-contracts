@@ -20,6 +20,8 @@ abstract contract NameWrapper721 is NameWrapper {
         string memory _ethNode
     ) NameWrapper(_ens, _registrar, _metadataService, _ethNode) {}
 
+    function balanceOf(address owner) external view returns (uint256) {}
+
     function _mint(
         bytes32 node,
         address owner,
