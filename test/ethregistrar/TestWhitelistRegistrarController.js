@@ -5,13 +5,14 @@ const {
   ens: { FUSES },
 } = require('../test-utils')
 
-const { CANNOT_UNWRAP, PARENT_CANNOT_CONTROL, IS_DOT_ETH } = FUSES
+const { CANNOT_UNWRAP, PARENT_CANNOT_CONTROL, IS_DOT_ETH, CANNOT_TRANSFER } =
+  FUSES
 
 const { expect } = require('chai')
 
 const { ethers, network } = require('hardhat')
 const provider = ethers.provider
-const { namehash } = require('../test-utils/ens')
+const { namehash, labelhash } = require('../test-utils/ens')
 const sha3 = require('web3-utils').sha3
 const {
   EMPTY_BYTES32: EMPTY_BYTES,
@@ -45,6 +46,7 @@ contract('WhitelistRegistrarController', function () {
     '0x0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF'
   let ownerSigner
   let ownerAccount // Account that owns the registrar
+  let registrantSigner
   let registrantAccount // Account that owns test names
   let accounts = []
 
@@ -181,6 +183,7 @@ contract('WhitelistRegistrarController', function () {
 
     signers = await ethers.getSigners()
     ownerSigner = signers[0]
+    registrantSigner = signers[1]
     ownerAccount = await signers[0].getAddress()
     registrantAccount = await signers[1].getAddress()
     accounts = [ownerAccount, registrantAccount, signers[2].getAddress()]
@@ -230,6 +233,7 @@ contract('WhitelistRegistrarController', function () {
     controller2 = controller.connect(signers[1])
     await nameWrapper.setController(controller.address, true)
     await baseRegistrar.addController(nameWrapper.address)
+    await baseRegistrar.addController(controller.address) // Takeover implementation required whitelist registrar to be added as a controller
     await reverseRegistrar.setController(controller.address, true)
 
     resolver = await deploy(
@@ -1099,5 +1103,237 @@ contract('WhitelistRegistrarController', function () {
     ).to.be.revertedWith(
       "Transaction reverted: function selector was not recognized and there's no fallback function",
     )
+  })
+
+  it("should allow take over of domain name even through it hasn't expired yet", async () => {
+    // Do basic registration test first
+    const calldataBefore = [
+      resolver.interface.encodeFunctionData('setAddr(bytes32,address)', [
+        namehash('takeovername.eth'),
+        ownerAccount,
+      ]),
+      resolver.interface.encodeFunctionData('setText', [
+        namehash('takeovername.eth'),
+        'url',
+        'opti.domains',
+      ]),
+    ]
+
+    var commitment = await controller2.makeCommitment(
+      'takeovername',
+      ownerAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      resolver.address,
+      calldataBefore,
+      false,
+      0,
+    )
+    var tx = await controller2.commit(commitment)
+    // expect(await controller2.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
+
+    // await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
+    var balanceBefore = await web3.eth.getBalance(controller.address)
+    var tx = await controller2.register(
+      'takeovername',
+      ownerAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      resolver.address,
+      calldataBefore,
+      false,
+      0,
+      registerSignature(commitment),
+      { value: BUFFERED_REGISTRATION_COST },
+    )
+
+    await expect(tx)
+      .to.emit(controller, 'NameRegistered')
+      .withArgs(
+        'takeovername',
+        sha3('takeovername'),
+        ownerAccount,
+        0,
+        0,
+        REGISTRATION_EXPIRATION,
+      )
+
+    expect(
+      (await web3.eth.getBalance(controller.address)) - balanceBefore,
+    ).to.equal(0)
+
+    var nodehash = namehash('takeovername.eth')
+    expect(await ens.resolver(nodehash)).to.equal(resolver.address)
+    expect(await ens.owner(nodehash)).to.equal(nameWrapper.address)
+    expect(await baseRegistrar.ownerOf(sha3('takeovername'))).to.equal(
+      nameWrapper.address,
+    )
+    expect(await resolver['addr(bytes32)'](nodehash)).to.equal(ownerAccount)
+    expect(await resolver['text'](nodehash, 'url')).to.equal('opti.domains')
+    expect(await nameWrapper.ownerOf(nodehash)).to.equal(ownerAccount)
+
+    const oldExpires = await baseRegistrar.nameExpires(sha3('takeovername'))
+
+    // Registrant takeover domain
+    const calldataTakeover = [
+      resolver.interface.encodeFunctionData('setAddr(bytes32,address)', [
+        namehash('takeovername.eth'),
+        registrantAccount,
+      ]),
+    ]
+
+    var commitmentTakeover = await controller2.makeCommitment(
+      'takeovername',
+      registrantAccount,
+      REGISTRATION_EXPIRATION + 100,
+      secret,
+      resolver.address,
+      calldataTakeover,
+      false,
+      0,
+    )
+
+    // Must revert if not takeover
+    expect(
+      controller2.register(
+        'takeovername',
+        registrantAccount,
+        REGISTRATION_EXPIRATION + 100,
+        secret,
+        resolver.address,
+        calldataTakeover,
+        false,
+        0,
+        registerSignature(commitmentTakeover),
+      ),
+    ).to.be.revertedWith('NameNotAvailable("takeovername")')
+
+    // Must be able to takeover
+    const takeoverTx = await controller2.register(
+      'takeovername',
+      registrantAccount,
+      REGISTRATION_EXPIRATION + 100,
+      secret,
+      resolver.address,
+      calldataTakeover,
+      false,
+      0,
+      registerSignature(commitmentTakeover, true),
+    )
+
+    await expect(takeoverTx)
+      .to.emit(controller, 'NameRegistered')
+      .withArgs(
+        'takeovername',
+        sha3('takeovername'),
+        registrantAccount,
+        0,
+        0,
+        REGISTRATION_EXPIRATION + 100,
+      )
+
+    expect(
+      (await web3.eth.getBalance(controller.address)) - balanceBefore,
+    ).to.equal(0)
+
+    var nodehash = namehash('takeovername.eth')
+    expect(await ens.resolver(nodehash)).to.equal(resolver.address)
+    expect(await ens.owner(nodehash)).to.equal(nameWrapper.address)
+    expect(await baseRegistrar.ownerOf(sha3('takeovername'))).to.equal(
+      nameWrapper.address,
+    )
+    expect(await resolver['addr(bytes32)'](nodehash)).to.equal(
+      registrantAccount,
+    )
+    expect(await resolver['text'](nodehash, 'url')).to.equal('opti.domains')
+    expect(await nameWrapper.ownerOf(nodehash)).to.equal(registrantAccount)
+
+    const newExpires = await baseRegistrar.nameExpires(sha3('takeovername'))
+    expect(newExpires.toNumber() - oldExpires.toNumber()).to.equal(100)
+  })
+
+  // Test base fuses
+  it('Should become soulbound if baseFuses is set to CANNOT_TRANSFER | CANNOT_UNWRAP', async () => {
+    await (
+      await controller.setBaseFuses(CANNOT_TRANSFER | CANNOT_UNWRAP)
+    ).wait()
+
+    var commitment = await controller2.makeCommitment(
+      'newconfigname',
+      registrantAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      resolver.address,
+      callData,
+      false,
+      0,
+    )
+    var tx = await controller2.commit(commitment)
+    // expect(await controller2.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
+
+    // await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
+    var tx = await controller2.register(
+      'newconfigname',
+      registrantAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      resolver.address,
+      callData,
+      false,
+      0,
+      registerSignature(commitment),
+      { value: BUFFERED_REGISTRATION_COST },
+    )
+
+    await tx.wait()
+
+    const newconfig_namehash = namehash('newconfigname.eth')
+
+    // Should revert if try to transfer
+    expect(
+      nameWrapper
+        .connect(registrantSigner)
+        ['safeTransferFrom(address,address,uint256,uint256,bytes)'](
+          registrantAccount,
+          ownerAccount,
+          newconfig_namehash,
+          1,
+          '0x',
+        ),
+    ).to.be.revertedWith(`OperationProhibited("${newconfig_namehash}")`)
+
+    // Should revert if approve to another entity and transfer
+    await (
+      await nameWrapper
+        .connect(registrantSigner)
+        .setApprovalForAll(ownerAccount, true)
+    ).wait()
+
+    expect(
+      nameWrapper
+        .connect(ownerSigner)
+        ['safeTransferFrom(address,address,uint256,uint256,bytes)'](
+          registrantAccount,
+          ownerAccount,
+          newconfig_namehash,
+          1,
+          '0x',
+        ),
+    ).to.be.revertedWith(`OperationProhibited("${newconfig_namehash}")`)
+
+    // Should revert if try to unwrap
+    expect(
+      nameWrapper
+        .connect(registrantSigner)
+        .unwrapETH2LD(
+          labelhash('newconfigname'),
+          registrantAccount,
+          registrantAccount,
+        ),
+    ).to.be.revertedWith(`OperationProhibited("${newconfig_namehash}")`)
   })
 })

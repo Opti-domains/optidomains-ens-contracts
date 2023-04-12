@@ -135,10 +135,6 @@ contract WhitelistRegistrarController is
         uint16 ownerControlledFuses,
         bytes calldata operatorSignature
     ) public payable override {
-        if (!available(name)) {
-            revert NameNotAvailable(name);
-        }
-
         {
             bytes32 commitment = makeCommitment(
                 name,
@@ -192,6 +188,10 @@ contract WhitelistRegistrarController is
                     base.setExpiry(uint256(keccak256(bytes(name))), 1);
                 }
             }
+        }
+
+        if (!available(name)) {
+            revert NameNotAvailable(name);
         }
 
         {
