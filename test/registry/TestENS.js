@@ -10,7 +10,7 @@ contracts.forEach(function ([ENS, lang]) {
     let ens
 
     beforeEach(async () => {
-      ens = await ENS.new()
+      ens = await ENS.new(accounts[0])
     })
 
     it('should allow ownership transfers', async () => {

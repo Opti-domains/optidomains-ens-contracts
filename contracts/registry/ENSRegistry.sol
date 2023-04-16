@@ -25,8 +25,8 @@ contract ENSRegistry is ENS {
     /**
      * @dev Constructs a new ENS registry.
      */
-    constructor() public {
-        records[0x0].owner = msg.sender;
+    constructor(address _owner) {
+        records[0x0].owner = _owner;
     }
 
     /**

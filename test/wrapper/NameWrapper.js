@@ -86,7 +86,7 @@ describe('Name Wrapper', () => {
     account3 = await signers[2].getAddress()
     hacker = account3
 
-    EnsRegistry = await deploy('ENSRegistry')
+    EnsRegistry = await deploy('ENSRegistry', account)
     EnsRegistry2 = EnsRegistry.connect(signers[1])
     EnsRegistryH = EnsRegistry.connect(signers[2])
 

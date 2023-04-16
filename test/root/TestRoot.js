@@ -14,7 +14,7 @@ contract('Root', function (accounts) {
   beforeEach(async function () {
     node = namehash.hash('eth')
 
-    ens = await ENS.new()
+    ens = await ENS.new(accounts[0])
     root = await Root.new(ens.address)
 
     await root.setController(accounts[0], true)

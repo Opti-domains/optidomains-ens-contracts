@@ -10,8 +10,8 @@ contract('ENSRegistryWithFallback', function (accounts) {
   let ens
 
   beforeEach(async () => {
-    old = await ENSWithoutFallback.new()
-    ens = await ENS.new(old.address)
+    old = await ENSWithoutFallback.new(accounts[0])
+    ens = await ENS.new(old.address, accounts[0])
   })
 
   it('should allow setting the record', async () => {

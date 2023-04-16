@@ -25,7 +25,7 @@ contract('PublicResolver', function (accounts) {
     signers = await ethers.getSigners()
     account = await signers[0].getAddress()
     node = namehash.hash('eth')
-    ens = await ENS.new()
+    ens = await ENS.new(accounts[0])
     nameWrapper = await NameWrapper.new()
 
     //setup reverse registrar

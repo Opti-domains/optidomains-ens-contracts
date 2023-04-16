@@ -189,7 +189,7 @@ contract('WhitelistRegistrarController', function () {
     registrantAccount = await signers[1].getAddress()
     accounts = [ownerAccount, registrantAccount, signers[2].getAddress()]
 
-    ens = await deploy('ENSRegistry')
+    ens = await deploy('ENSRegistry', ownerAccount)
 
     baseRegistrar = await deploy(
       'BaseRegistrarImplementation',

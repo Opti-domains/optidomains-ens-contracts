@@ -52,7 +52,7 @@ contract('UniversalResolver', function (accounts) {
 
   beforeEach(async () => {
     node = namehash.hash('eth')
-    ens = await deploy('ENSRegistry')
+    ens = await deploy('ENSRegistry', accounts[0])
     nameWrapper = await deploy('DummyNameWrapper')
     reverseRegistrar = await deploy('ReverseRegistrar', ens.address)
     reverseNode = accounts[0].toLowerCase().substring(2) + '.addr.reverse'

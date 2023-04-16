@@ -12,7 +12,7 @@ contract ENSRegistryWithFallback is ENSRegistry {
     /**
      * @dev Constructs a new ENS registrar.
      */
-    constructor(ENS _old) public ENSRegistry() {
+    constructor(ENS _old, address _owner) public ENSRegistry(_owner) {
         old = _old;
     }
 

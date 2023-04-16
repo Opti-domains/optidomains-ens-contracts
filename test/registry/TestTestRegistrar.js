@@ -12,7 +12,7 @@ contract('TestRegistrar', function (accounts) {
   beforeEach(async () => {
     node = namehash.hash('eth')
 
-    ens = await ENS.new()
+    ens = await ENS.new(accounts[0])
     registrar = await TestRegistrar.new(ens.address, '0x0')
 
     await ens.setOwner('0x0', registrar.address, { from: accounts[0] })

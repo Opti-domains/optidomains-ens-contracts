@@ -23,7 +23,7 @@ contract('BaseRegistrar', function (accounts) {
   let registrar
 
   before(async () => {
-    ens = await ENS.new()
+    ens = await ENS.new(accounts[0])
 
     registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {
       from: ownerAccount,

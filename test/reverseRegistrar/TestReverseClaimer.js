@@ -25,7 +25,7 @@ describe('ReverseClaimer', () => {
     account2 = await signers[1].getAddress()
     hacker = await signers[2].getAddress()
 
-    EnsRegistry = await deploy('ENSRegistry')
+    EnsRegistry = await deploy('ENSRegistry', account)
     BaseRegistrar = await deploy(
       'BaseRegistrarImplementation',
       EnsRegistry.address,
