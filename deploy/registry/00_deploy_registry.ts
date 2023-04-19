@@ -48,7 +48,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   } else {
     await deploy('ENSRegistry', {
       from: deployer,
-      args: [],
+      args: [deployer],
       log: true,
     })
   }

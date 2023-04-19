@@ -56,6 +56,7 @@ contract BaseRegistrarImplementation is ERC721, IBaseRegistrar, Ownable {
     constructor(ENS _ens, bytes32 _baseNode) ERC721("", "") {
         ens = _ens;
         baseNode = _baseNode;
+        _transferOwnership(ens.owner(bytes32(0)));
     }
 
     modifier live() {

@@ -84,6 +84,7 @@ contract WhitelistRegistrarController is
         ETH_NODE = keccak256(
             abi.encodePacked(bytes32(0), keccak256(bytes(_ethNode)))
         );
+        _transferOwnership(_base.ens().owner(bytes32(0)));
     }
 
     function valid(string memory name) public pure returns (bool) {

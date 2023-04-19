@@ -36,6 +36,8 @@ contract ReverseRegistrar is Ownable, Controllable, IReverseRegistrar {
         if (address(oldRegistrar) != address(0x0)) {
             oldRegistrar.claim(msg.sender);
         }
+
+        _transferOwnership(ens.owner(bytes32(0)));
     }
 
     modifier authorised(address addr) {

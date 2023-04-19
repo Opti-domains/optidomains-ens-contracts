@@ -86,6 +86,8 @@ abstract contract NameWrapper is
         names[ROOT_NODE] = "\x00";
         names[ETH_NODE] = bytes(string.concat("\x00", _ethNode, "\x00"));
         names[ETH_NODE][0] = bytes1(uint8(names[ETH_NODE].length - 2));
+
+        _transferOwnership(ens.owner(bytes32(0)));
     }
 
     function supportsInterface(
