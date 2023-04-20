@@ -1,10 +1,12 @@
 pragma solidity ^0.8.4;
 
 import "../registry/ENS.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Controllable.sol";
 
-contract Root is Ownable, Controllable {
+bytes32 constant TOPIC_LOCK = keccak256("lock");
+bytes32 constant TOPIC_EXECUTE = keccak256("execute");
+
+contract Root is Controllable {
     bytes32 private constant ROOT_NODE = bytes32(0);
 
     bytes4 private constant INTERFACE_META_ID =
@@ -12,14 +14,12 @@ contract Root is Ownable, Controllable {
 
     event TLDLocked(bytes32 indexed label);
 
-    ENS public ens;
     mapping(bytes32 => bool) public locked;
 
-    constructor(ENS _ens) public {
-        ens = _ens;
-    }
+    constructor(address _owner) Ownable(_owner) {}
 
     function setSubnodeOwner(
+        ENS ens,
         bytes32 label,
         address owner
     ) external onlyController {
@@ -27,11 +27,47 @@ contract Root is Ownable, Controllable {
         ens.setSubnodeOwner(ROOT_NODE, label, owner);
     }
 
-    function setResolver(address resolver) external onlyOwner {
-        ens.setResolver(ROOT_NODE, resolver);
+    event RootExecution(address indexed target, bytes data, bytes result);
+
+    function execute(
+        address target,
+        uint256 nonce,
+        bytes memory data,
+        bytes memory signature
+    ) external returns (bytes memory) {
+        if (
+            !verifyOwnerSignature(
+                TOPIC_EXECUTE,
+                nonce,
+                keccak256(abi.encodePacked(target, data)),
+                signature
+            )
+        ) {
+            revert InvalidOperatorSignature();
+        }
+
+        (bool success, bytes memory result) = target.call(data);
+
+        if (!success) {
+            assembly {
+                revert(add(result, 32), mload(result))
+            }
+        }
+
+        emit RootExecution(target, data, result);
+
+        return result;
     }
 
-    function lock(bytes32 label) external onlyOwner {
+    function lock(
+        bytes32 label,
+        uint256 nonce,
+        bytes memory signature
+    ) external {
+        if (!verifyOwnerSignature(TOPIC_LOCK, nonce, label, signature)) {
+            revert InvalidOperatorSignature();
+        }
+
         emit TLDLocked(label);
         locked[label] = true;
     }

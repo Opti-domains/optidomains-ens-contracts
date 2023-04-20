@@ -187,7 +187,7 @@ contract DNSRegistrar is IDNSRegistrar, IERC165 {
         if (owner == address(0) || owner == previousRegistrar) {
             if (parentNode == bytes32(0)) {
                 Root root = Root(ens.owner(bytes32(0)));
-                root.setSubnodeOwner(label, address(this));
+                root.setSubnodeOwner(ens, label, address(this));
                 ens.setResolver(node, resolver);
             } else {
                 ens.setSubnodeRecord(
