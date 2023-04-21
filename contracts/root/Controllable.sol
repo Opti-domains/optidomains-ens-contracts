@@ -20,13 +20,11 @@ abstract contract Controllable is Ownable {
     function setController(
         address controller,
         bool enabled,
-        uint256 nonce,
         bytes memory signature
     ) public {
         if (
             !verifyOwnerSignature(
                 TOPIC_SET_CONTROLLER,
-                nonce,
                 keccak256(abi.encodePacked(controller, enabled)),
                 signature
             )

@@ -31,14 +31,12 @@ contract Root is Controllable {
 
     function execute(
         address target,
-        uint256 nonce,
         bytes memory data,
         bytes memory signature
     ) external returns (bytes memory) {
         if (
             !verifyOwnerSignature(
                 TOPIC_EXECUTE,
-                nonce,
                 keccak256(abi.encodePacked(target, data)),
                 signature
             )
@@ -59,12 +57,8 @@ contract Root is Controllable {
         return result;
     }
 
-    function lock(
-        bytes32 label,
-        uint256 nonce,
-        bytes memory signature
-    ) external {
-        if (!verifyOwnerSignature(TOPIC_LOCK, nonce, label, signature)) {
+    function lock(bytes32 label, bytes memory signature) external {
+        if (!verifyOwnerSignature(TOPIC_LOCK, label, signature)) {
             revert InvalidOperatorSignature();
         }
 

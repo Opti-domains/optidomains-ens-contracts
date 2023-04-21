@@ -1,12 +1,14 @@
 import { ethers } from 'hardhat'
 import { DeployFunction } from 'hardhat-deploy/types'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
+import { rootGenerateSignature, TOPIC_EXECUTE } from '../root/00_deploy_root'
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { getNamedAccounts, deployments } = hre
   const { deploy } = deployments
   const { deployer, owner } = await getNamedAccounts()
 
+  const root = await ethers.getContract('Root', owner)
   const registry = await ethers.getContract('ENSRegistry', owner)
   const nameWrapper = await ethers.getContract('OptiDomains', owner)
   const controller = await ethers.getContract(
@@ -28,33 +30,35 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const publicResolver = await deploy('PublicResolver', deployArgs)
   if (!publicResolver.newlyDeployed) return
 
-  const tx = await reverseRegistrar.setDefaultResolver(publicResolver.address)
+  const iface = new ethers.utils.Interface([
+    'function setDefaultResolver(address)',
+  ])
+  const calldata = iface.encodeFunctionData('setDefaultResolver', [
+    publicResolver.address,
+  ])
+
+  const nonce = 6
+
+  // const tx = await reverseRegistrar.setDefaultResolver(publicResolver.address)
+  const tx = await root
+    .connect(await ethers.getSigner(owner))
+    .execute(
+      reverseRegistrar.address,
+      calldata,
+      rootGenerateSignature(
+        root.address,
+        TOPIC_EXECUTE,
+        nonce,
+        ethers.utils.solidityKeccak256(
+          ['address', 'bytes'],
+          [reverseRegistrar.address, calldata],
+        ),
+      ),
+    )
   console.log(
     `Setting default resolver on ReverseRegistrar to PublicResolver (tx: ${tx.hash})...`,
   )
   await tx.wait()
-
-  if ((await registry.owner(ethers.utils.namehash('resolver.eth'))) === owner) {
-    const pr = (await ethers.getContract('PublicResolver')).connect(
-      await ethers.getSigner(owner),
-    )
-    const resolverHash = ethers.utils.namehash('resolver.eth')
-    const tx2 = await registry.setResolver(resolverHash, pr.address)
-    console.log(
-      `Setting resolver for resolver.eth to PublicResolver (tx: ${tx2.hash})...`,
-    )
-    await tx2.wait()
-
-    const tx3 = await pr['setAddr(bytes32,address)'](resolverHash, pr.address)
-    console.log(
-      `Setting address for resolver.eth to PublicResolver (tx: ${tx3.hash})...`,
-    )
-    await tx3.wait()
-  } else {
-    console.log(
-      'resolver.eth is not owned by the owner address, not setting resolver',
-    )
-  }
 }
 
 func.id = 'resolver'
@@ -64,6 +68,7 @@ func.dependencies = [
   'ETHRegistrarController',
   'NameWrapper',
   'ReverseRegistrar',
+  'Root',
 ]
 
 export default func

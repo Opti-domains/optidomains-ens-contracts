@@ -3,6 +3,7 @@ import { ethers } from 'hardhat'
 import { DeployFunction } from 'hardhat-deploy/types'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
 import { keccak256 } from 'js-sha3'
+import { rootGenerateSignature, TOPIC_EXECUTE } from '../root/00_deploy_root'
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { getNamedAccounts, deployments, network } = hre
@@ -33,18 +34,57 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const root = await ethers.getContract('Root')
 
+  const iface = new ethers.utils.Interface([
+    'function setSubnodeOwner(bytes32,bytes32,address) returns (bytes32)',
+  ])
+  const calldata = iface.encodeFunctionData('setSubnodeOwner', [
+    '0x0000000000000000000000000000000000000000000000000000000000000000',
+    '0x' + keccak256('reverse'),
+    root.address,
+  ])
+
+  let nonce = 1
+
   const tx1 = await root
     .connect(await ethers.getSigner(owner))
-    .setSubnodeOwner('0x' + keccak256('reverse'), owner)
+    .execute(
+      registry.address,
+      calldata,
+      rootGenerateSignature(
+        root.address,
+        TOPIC_EXECUTE,
+        nonce,
+        ethers.utils.solidityKeccak256(
+          ['address', 'bytes'],
+          [registry.address, calldata],
+        ),
+      ),
+    )
   console.log(`Setting owner of .reverse to owner on root (tx: ${tx1.hash})...`)
   await tx1.wait()
 
-  const tx2 = await registry
+  nonce++
+
+  const calldata2 = iface.encodeFunctionData('setSubnodeOwner', [
+    namehash('reverse'),
+    '0x' + keccak256('addr'),
+    reverseRegistrar.address,
+  ])
+
+  const tx2 = await root
     .connect(await ethers.getSigner(owner))
-    .setSubnodeOwner(
-      namehash('reverse'),
-      '0x' + keccak256('addr'),
-      reverseRegistrar.address,
+    .execute(
+      registry.address,
+      calldata2,
+      rootGenerateSignature(
+        root.address,
+        TOPIC_EXECUTE,
+        nonce,
+        ethers.utils.solidityKeccak256(
+          ['address', 'bytes'],
+          [registry.address, calldata2],
+        ),
+      ),
     )
   console.log(
     `Setting owner of .addr.reverse to ReverseRegistrar on registry (tx: ${tx2.hash})...`,

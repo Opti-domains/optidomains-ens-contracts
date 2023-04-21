@@ -26,16 +26,9 @@ contract Ownable {
 
     function verifyOwnerSignature(
         bytes32 topic,
-        uint256 nonce,
         bytes32 digest,
         bytes memory signature
     ) internal returns (bool) {
-        if (nonce != currentNonce) {
-            return false;
-        }
-
-        currentNonce++;
-
         return
             SignatureChecker.isValidSignatureNow(
                 owner,
@@ -45,7 +38,7 @@ contract Ownable {
                         bytes1(0),
                         address(this),
                         topic, // keccak256("...")
-                        nonce,
+                        currentNonce++,
                         digest
                     )
                 ),
@@ -55,13 +48,11 @@ contract Ownable {
 
     function transferOwnership(
         address newOwner,
-        uint256 nonce,
         bytes memory signature
     ) public {
         if (
             !verifyOwnerSignature(
                 TOPIC_TRANSFER_OWNERSHIP,
-                nonce,
                 keccak256(abi.encodePacked(newOwner)),
                 signature
             )

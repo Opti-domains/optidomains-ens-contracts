@@ -5,6 +5,63 @@ import { HardhatRuntimeEnvironment } from 'hardhat/types'
 const ZERO_HASH =
   '0x0000000000000000000000000000000000000000000000000000000000000000'
 
+export const TOPIC_LOCK = ethers.utils.keccak256(
+  ethers.utils.toUtf8Bytes('lock'),
+)
+export const TOPIC_EXECUTE = ethers.utils.keccak256(
+  ethers.utils.toUtf8Bytes('execute'),
+)
+export const TOPIC_TRANSFER_OWNERSHIP = ethers.utils.keccak256(
+  ethers.utils.toUtf8Bytes('transferOwnership'),
+)
+export const TOPIC_SET_CONTROLLER = ethers.utils.keccak256(
+  ethers.utils.toUtf8Bytes('setController'),
+)
+
+export function rootGenerateSignature(
+  rootAddress: string,
+  topic: string,
+  nonce: number,
+  digestIn: string,
+) {
+  // Define the input types and values of the transaction data
+  const inputTypes = [
+    'bytes1',
+    'bytes1',
+    'address',
+    'bytes32',
+    'uint256',
+    'bytes32',
+  ]
+  const inputValues = ['0x19', '0x00', rootAddress, topic, nonce, digestIn]
+
+  // ABI-encode the transaction data
+  const digest = ethers.utils.solidityKeccak256(inputTypes, inputValues)
+
+  // console.log(
+  //   digest,
+  //   controller.address,
+  //   network.config.chainId,
+  //   isTakeover
+  //     ? '0x0548274c4be004976424de9f6f485fbe40a8f13e41524cd574fead54e448415c'
+  //     : '0xdd007bd789f73e08c2714644c55b11c7d202931d717def434e3c9caa12a9f583',
+  //   commitment,
+  // )
+
+  const signingKey = new ethers.utils.SigningKey(
+    process.env.SIGNER_PRIVATE_KEY as string,
+  )
+  const signature = signingKey.signDigest(digest)
+
+  return ethers.utils.hexlify(
+    ethers.utils.concat([
+      signature.r,
+      signature.s,
+      ethers.utils.hexlify(signature.v),
+    ]),
+  )
+}
+
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { getNamedAccounts, deployments, network } = hre
   const { deploy } = deployments
@@ -14,55 +71,19 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     return true
   }
 
-  const registry = await ethers.getContract('ENSRegistry')
-
   await deploy('Root', {
     from: deployer,
-    args: [registry.address],
+    args: [process.env.SIGNER_ACCOUNT],
     log: true,
   })
 
   const root = await ethers.getContract('Root')
-
-  const tx1 = await registry.setOwner(ZERO_HASH, root.address)
-  console.log(
-    `Setting owner of root node to root contract (tx: ${tx1.hash})...`,
-  )
-  await tx1.wait()
-
-  const rootOwner = await root.owner()
-
-  switch (rootOwner) {
-    case deployer:
-      const tx2 = await root
-        .connect(await ethers.getSigner(deployer))
-        .transferOwnership(owner)
-      console.log(
-        `Transferring root ownership to final owner (tx: ${tx2.hash})...`,
-      )
-      await tx2.wait()
-    case owner:
-      if (!(await root.controllers(owner))) {
-        const tx2 = await root
-          .connect(await ethers.getSigner(owner))
-          .setController(owner, true)
-        console.log(
-          `Setting final owner as controller on root contract (tx: ${tx2.hash})...`,
-        )
-        await tx2.wait()
-      }
-      break
-    default:
-      console.log(
-        `WARNING: Root is owned by ${rootOwner}; cannot transfer to owner account`,
-      )
-  }
 
   return true
 }
 
 func.id = 'root'
 func.tags = ['root', 'Root']
-func.dependencies = ['ENSRegistry']
+func.dependencies = []
 
 export default func

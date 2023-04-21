@@ -2,6 +2,7 @@ import { Interface } from 'ethers/lib/utils'
 import { ethers } from 'hardhat'
 import { DeployFunction } from 'hardhat-deploy/types'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
+import { TOPIC_EXECUTE, rootGenerateSignature } from '../root/00_deploy_root'
 
 const { makeInterfaceId } = require('@openzeppelin/test-helpers')
 
@@ -16,6 +17,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deploy } = deployments
   const { deployer, owner } = await getNamedAccounts()
 
+  const registry = await ethers.getContract('ENSRegistry')
+  const root = await ethers.getContract('Root')
   const registrar = await ethers.getContract(
     'BaseRegistrarImplementation',
     owner,
@@ -38,30 +41,56 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const controller = await deploy('WhitelistRegistrarController', deployArgs)
   if (!controller.newlyDeployed) return
 
-  if (owner !== deployer) {
-    const c = await ethers.getContract('WhitelistRegistrarController', deployer)
-    const tx = await c.transferOwnership(owner)
-    console.log(
-      `Transferring ownership of WhitelistRegistrarController to ${owner} (tx: ${tx.hash})...`,
-    )
-    await tx.wait()
-  }
+  const iface = new ethers.utils.Interface([
+    'function setController(address,bool)',
+  ])
+  const calldata = iface.encodeFunctionData('setController', [
+    controller.address,
+    true,
+  ])
 
-  // Only attempt to make controller etc changes directly on testnets
-  if (network.name === 'mainnet') return
+  let nonce = 4
 
-  console.log(
-    'WRAPPER OWNER',
-    await nameWrapper.owner(),
-    await nameWrapper.signer.getAddress(),
+  // console.log(
+  //   'WRAPPER OWNER',
+  //   await nameWrapper.owner(),
+  //   await nameWrapper.signer.getAddress(),
+  // )
+  // const tx1 = await nameWrapper.setController(controller.address, true)
+  const tx1 = await root.execute(
+    nameWrapper.address,
+    calldata,
+    rootGenerateSignature(
+      root.address,
+      TOPIC_EXECUTE,
+      nonce,
+      ethers.utils.solidityKeccak256(
+        ['address', 'bytes'],
+        [nameWrapper.address, calldata],
+      ),
+    ),
   )
-  const tx1 = await nameWrapper.setController(controller.address, true)
   console.log(
     `Adding WhitelistRegistrarController as a controller of NameWrapper (tx: ${tx1.hash})...`,
   )
   await tx1.wait()
 
-  const tx2 = await reverseRegistrar.setController(controller.address, true)
+  nonce++
+
+  // const tx2 = await reverseRegistrar.setController(controller.address, true)
+  const tx2 = await root.execute(
+    reverseRegistrar.address,
+    calldata,
+    rootGenerateSignature(
+      root.address,
+      TOPIC_EXECUTE,
+      nonce,
+      ethers.utils.solidityKeccak256(
+        ['address', 'bytes'],
+        [reverseRegistrar.address, calldata],
+      ),
+    ),
+  )
   console.log(
     `Adding WhitelistRegistrarController as a controller of ReverseRegistrar (tx: ${tx2.hash})...`,
   )
@@ -101,6 +130,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 func.tags = ['ethregistrar', 'ETHRegistrarController']
 func.dependencies = [
   'ENSRegistry',
+  'Root',
   'BaseRegistrarImplementation',
   'ReverseRegistrar',
   'NameWrapper',

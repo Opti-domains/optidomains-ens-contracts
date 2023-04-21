@@ -72,7 +72,6 @@ contract('Root', function (accounts) {
     await root.setController(
       accounts[1],
       true,
-      0,
       generateSignature(
         TOPIC_SET_CONTROLLER,
         0,
@@ -114,7 +113,6 @@ contract('Root', function (accounts) {
 
       await root.execute(
         ens.address,
-        1,
         calldata,
         generateSignature(
           TOPIC_EXECUTE,
@@ -134,7 +132,6 @@ contract('Root', function (accounts) {
     it('should not allow setting a locked TLD', async () => {
       await root.lock(
         '0x' + sha3('eth'),
-        1,
         generateSignature(TOPIC_LOCK, 1, '0x' + sha3('eth')),
       )
       await exceptions.expectFailure(
