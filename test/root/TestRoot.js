@@ -140,5 +140,17 @@ contract('Root', function (accounts) {
         }),
       )
     })
+
+    it('should allow to transfer ownership', async () => {
+      await root.transferOwnership(
+        accounts[2],
+        generateSignature(
+          TOPIC_TRANSFER_OWNERSHIP,
+          1,
+          ethers.utils.solidityKeccak256(['address'], [accounts[2]]),
+        ),
+      )
+      assert.equal(accounts[2], await root.owner())
+    })
   })
 })

@@ -73,6 +73,19 @@ const config: HardhatUserConfig = {
       chainId: 1,
       accounts: real_accounts,
     },
+
+    optimism_goerli: {
+      url: `https://goerli.optimism.io`,
+      tags: ['test', 'use_root'],
+      chainId: 420,
+      accounts: real_accounts,
+    },
+    base_goerli: {
+      url: `https://goerli.base.org`,
+      tags: ['test', 'use_root'],
+      chainId: 84531,
+      accounts: real_accounts,
+    },
   },
   mocha: {},
   solidity: {
