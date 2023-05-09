@@ -3,11 +3,11 @@ pragma solidity ~0.8.17;
 
 import "./NameWrapper721.sol";
 
-contract BoredDomains is NameWrapper721 {
-    string public constant name = "Bored Domains";
-    string public constant symbol = ".bored";
+contract TownDomains is NameWrapper721 {
+    string public constant name = "Bored Town Domains";
+    string public constant symbol = ".town";
     string public constant contractURI =
-        "https://metadata.opti.domains/collection/domains/bored";
+        "https://metadata.opti.domains/collection/domains/town";
 
     constructor(
         ENS _ens,
