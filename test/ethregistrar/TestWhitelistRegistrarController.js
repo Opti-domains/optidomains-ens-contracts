@@ -1443,4 +1443,47 @@ contract('WhitelistRegistrarController', function () {
         .toString(),
     ).to.equal(ethers.utils.parseEther('0.009001'))
   })
+
+  it('Should has small cost on domain registration', async () => {
+    await (await controller.activateCost(true)).wait()
+
+    var commitment = await controller.makeCommitment(
+      'newconfigname',
+      registrantAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      resolver.address,
+      callData,
+      false,
+      0,
+    )
+    var tx = await controller.commit(commitment)
+    // expect(await controller2.commitments(commitment)).to.equal(
+    //   (await web3.eth.getBlock(tx.blockNumber)).timestamp,
+    // )
+
+    // await evm.advanceTime((await controller2.minCommitmentAge()).toNumber())
+    var tx = await controller.register(
+      'newconfigname',
+      registrantAccount,
+      REGISTRATION_EXPIRATION,
+      secret,
+      resolver.address,
+      callData,
+      false,
+      0,
+      registerSignature(commitment),
+      { value: ethers.utils.parseEther('0.0006') },
+    )
+
+    await tx.wait()
+
+    expect(registerName('nofee')).to.be.reverted
+
+    await (
+      await registerName('smallfee1', {
+        value: ethers.utils.parseEther('0.0004'),
+      })
+    ).wait()
+  })
 })

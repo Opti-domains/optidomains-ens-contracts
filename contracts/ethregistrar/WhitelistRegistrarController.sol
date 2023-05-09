@@ -17,6 +17,8 @@ import {ISupporterPlan} from "./ISupporterPlan.sol";
 
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
+import "hardhat/console.sol";
+
 error NameNotAvailable(string name);
 error DurationTooShort(uint256 duration);
 error NegativeDuration();
@@ -51,6 +53,8 @@ contract WhitelistRegistrarController is
     ISupporterPlan public supporterPlan;
 
     mapping(bytes32 => uint256) public commitments;
+
+    bool public costActivated = false;
 
     event NameRegistered(
         string name,
@@ -136,6 +140,14 @@ contract WhitelistRegistrarController is
         uint16 ownerControlledFuses,
         bytes calldata operatorSignature
     ) public payable override {
+        {
+            if (costActivated) {
+                if (msg.value < 0.0004 ether + data.length * 0.0001 ether) {
+                    revert InsufficientValue();
+                }
+            }
+        }
+
         {
             bytes32 commitment = makeCommitment(
                 name,
@@ -271,7 +283,7 @@ contract WhitelistRegistrarController is
 
     function withdraw() public {
         bool success;
-        address to = owner();
+        address to = operator;
 
         /// @solidity memory-safe-assembly
         assembly {
@@ -324,5 +336,13 @@ contract WhitelistRegistrarController is
             resolver,
             string.concat(name, ".", ethNode)
         );
+    }
+
+    function activateCost(bool activated) public {
+        if (msg.sender != operator && msg.sender != owner()) {
+            revert InvalidOperatorSignature();
+        }
+
+        costActivated = activated;
     }
 }
