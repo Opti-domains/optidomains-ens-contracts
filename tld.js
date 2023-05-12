@@ -39,3 +39,20 @@ earth = ethers.utils.solidityKeccak256(
 )
 
 console.log(earth)
+
+console.log('addr.reverse')
+let reverse = ethers.utils.solidityKeccak256(
+  ['bytes32', 'bytes32'],
+  [ROOT, ethers.utils.keccak256(ethers.utils.toUtf8Bytes('reverse'))],
+)
+
+console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('reverse')))
+console.log(reverse)
+
+let addrReverse = ethers.utils.solidityKeccak256(
+  ['bytes32', 'bytes32'],
+  [reverse, ethers.utils.keccak256(ethers.utils.toUtf8Bytes('addr'))],
+)
+
+console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('addr')))
+console.log(addrReverse)

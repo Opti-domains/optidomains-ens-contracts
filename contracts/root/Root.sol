@@ -16,7 +16,11 @@ contract Root is Controllable {
 
     mapping(bytes32 => bool) public locked;
 
-    constructor(address _owner) Ownable(_owner) {}
+    constructor(address _owner) Ownable(_owner) {
+        // Reduce gas
+        controllers[address(this)] = true;
+        controllers[_owner] = true;
+    }
 
     function setSubnodeOwner(
         ENS ens,
