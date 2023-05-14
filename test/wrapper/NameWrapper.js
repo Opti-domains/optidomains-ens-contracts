@@ -6127,7 +6127,7 @@ describe('Name Wrapper', () => {
           EMPTY_ADDRESS,
           CAN_DO_EVERYTHING,
         ),
-      ).to.be.revertedWith('Controllable: Caller is not a controller')
+      ).to.be.revertedWith('NotController()')
     })
 
     it('Transfers the wrapped token to the target address.', async () => {

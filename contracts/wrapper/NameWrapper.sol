@@ -2,7 +2,6 @@
 pragma solidity ~0.8.17;
 
 import {ERC1155Fuse, IERC165, IERC1155MetadataURI} from "./ERC1155Fuse.sol";
-import {Controllable} from "./Controllable.sol";
 import {INameWrapper, CANNOT_UNWRAP, CANNOT_BURN_FUSES, CANNOT_TRANSFER, CANNOT_SET_RESOLVER, CANNOT_SET_TTL, CANNOT_CREATE_SUBDOMAIN, CANNOT_APPROVE, PARENT_CANNOT_CONTROL, CAN_DO_EVERYTHING, IS_DOT_ETH, CAN_EXTEND_EXPIRY, PARENT_CONTROLLED_FUSES, USER_SETTABLE_FUSES} from "./INameWrapper.sol";
 import {INameWrapperUpgrade} from "./INameWrapperUpgrade.sol";
 import {IMetadataService} from "./IMetadataService.sol";
@@ -28,6 +27,25 @@ error CannotUpgrade();
 error OperationProhibited(bytes32 node);
 error NameIsNotWrapped();
 error NameIsStillExpired();
+
+error NotController();
+
+// Contract size optimization
+contract Controllable is Ownable {
+    mapping(address => bool) public controllers;
+
+    event ControllerChanged(address indexed controller, bool active);
+
+    function setController(address controller, bool active) public onlyOwner {
+        controllers[controller] = active;
+        emit ControllerChanged(controller, active);
+    }
+
+    modifier onlyController() {
+        if (!controllers[msg.sender]) revert NotController();
+        _;
+    }
+}
 
 abstract contract NameWrapper is
     Ownable,
