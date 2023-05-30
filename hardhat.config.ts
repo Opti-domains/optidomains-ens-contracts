@@ -127,7 +127,7 @@ const config: HardhatUserConfig = {
       'legacy/*',
     ],
     spacing: 2,
-    pretty: true,
+    pretty: false,
   },
   namedAccounts: {
     deployer: {
