@@ -15,8 +15,10 @@ contract AxelarSampleProposalExecutable is IProposalExecutable {
         bytes32 conditionHash,
         bytes calldata data
     ) external payable {
-        // Check if chomtana.axl, optidomains.axl, flipside.axl using conditionHash
+        // Check if called from proposal controller
+        // And chomtana.axl, optidomains.axl, flipside.axl are all attested using conditionHash
         if (
+            msg.sender != 0xa8816Acfb9248f9afe10132bf89F63504e0a77F9 ||
             conditionHash !=
             0x730b6865379ae0ed5f9667f5255c42811c117016b53cf2f31210ac108c8e38bc
         ) {
