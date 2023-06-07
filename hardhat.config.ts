@@ -75,6 +75,13 @@ const config: HardhatUserConfig = {
       accounts: real_accounts,
     },
 
+    optimism: {
+      url: `https://mainnet.optimism.io`,
+      tags: ['test', 'use_root'],
+      chainId: 10,
+      accounts: real_accounts,
+    },
+
     optimism_goerli: {
       url: `https://goerli.optimism.io`,
       tags: ['test', 'use_root'],
