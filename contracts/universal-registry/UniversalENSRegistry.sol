@@ -14,6 +14,9 @@ bytes32 constant ADDR_REVERSE_NODE = 0x91d1777781884d03a6757a803996e38de2a42967f
 bytes32 constant SET_REGISTRY_MAPPING = keccak256(
     "UniversalENSRegistry.setRegistryMapping"
 );
+bytes32 constant SET_REVERSE_REGISTRY = keccak256(
+    "UniversalENSRegistry.setReverseRegistry"
+);
 
 error InvalidSignature();
 error NonceTooLow(uint256 nonce);
@@ -26,6 +29,7 @@ contract UniversalENSRegistry {
 
     mapping(address => address[]) public registryMapping;
     mapping(address => uint256) public currentNonce;
+    mapping(address => uint256) public reverseNonce;
     mapping(address => ENS) public reverseRegistryMapping;
 
     function isContract(address _addr) internal view returns (bool) {
@@ -171,8 +175,16 @@ contract UniversalENSRegistry {
             );
     }
 
-    function _setReverseRegistry(address addr, ENS registry) internal {
+    function _setReverseRegistry(
+        address addr,
+        ENS registry,
+        uint256 nonce
+    ) internal {
         // Do basic checks
+        if (nonce <= reverseNonce[addr]) {
+            revert NonceTooLow(nonce);
+        }
+
         bytes32 node = _getReverseNode(addr);
 
         if (!isContract(address(registry))) {
@@ -187,6 +199,7 @@ contract UniversalENSRegistry {
         }
 
         reverseRegistryMapping[addr] = registry;
+        reverseNonce[addr] = nonce;
 
         emit SetReverseRegistry(addr, address(registry), name);
     }
@@ -198,11 +211,52 @@ contract UniversalENSRegistry {
             }
         }
 
-        _setReverseRegistry(addr, registry);
+        _setReverseRegistry(addr, registry, reverseNonce[addr] + 1);
     }
 
     function setReverseRegistry(ENS registry) public {
         setReverseRegistryForAddr(msg.sender, registry);
+    }
+
+    function setReverseRegistryWithSignature(
+        address addr,
+        ENS registry,
+        uint256 nonce,
+        uint256 expiry,
+        bytes calldata signature
+    ) public {
+        if (expiry < block.timestamp) {
+            revert InvalidSignature();
+        }
+
+        bytes32 digest = keccak256(
+            abi.encodePacked(SET_REGISTRY_MAPPING, nonce, registry, expiry)
+        ).toEthSignedMessageHash();
+
+        if (!SignatureChecker.isValidSignatureNow(addr, digest, signature)) {
+            // Try again with chain id requirement
+            bytes32 digestWithChainId = keccak256(
+                abi.encodePacked(
+                    SET_REGISTRY_MAPPING,
+                    block.chainid,
+                    nonce,
+                    registry,
+                    expiry
+                )
+            ).toEthSignedMessageHash();
+
+            if (
+                !SignatureChecker.isValidSignatureNow(
+                    addr,
+                    digestWithChainId,
+                    signature
+                )
+            ) {
+                revert InvalidSignature();
+            }
+        }
+
+        _setReverseRegistry(addr, registry, nonce);
     }
 
     function getName(

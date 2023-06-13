@@ -18,12 +18,18 @@ const SET_REGISTRY_MAPPING = ethers.utils.keccak256(
 const ZERO_NODE =
   '0x0000000000000000000000000000000000000000000000000000000000000000'
 const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000'
+const ADDR_REVERSE = ethers.utils.namehash('addr.reverse')
 
 const LABEL1 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('node1'))
 const LABEL2 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('node2'))
 const LABEL3 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('node3'))
 const LABEL4 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('node4'))
 const LABEL5 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('node5'))
+
+const LABEL_REVERSE = ethers.utils.keccak256(
+  ethers.utils.toUtf8Bytes('reverse'),
+)
+const LABEL_ADDR = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('addr'))
 
 const NODE1 = ethers.utils.namehash('node1')
 const NODE2 = ethers.utils.namehash('node2')
@@ -38,6 +44,12 @@ const PK3 = '0x094478ae45aa12f3d1868e5780b32c629b009c6bdd340a8215edf65113d2775f'
 const OPERATOR1 = new ethers.Wallet(PK1).address
 const OPERATOR2 = new ethers.Wallet(PK2).address
 const OPERATOR3 = new ethers.Wallet(PK3).address
+
+function getReverseNode(address) {
+  return ethers.utils.namehash(
+    address.substring(2).toLowerCase() + '.addr.reverse',
+  )
+}
 
 contracts.forEach(function ([ENS, lang]) {
   contract('ENS ' + lang, function (accounts) {
@@ -78,6 +90,20 @@ contracts.forEach(function ([ENS, lang]) {
       })
     }
 
+    async function setReverseRecord(ens, resolver, account, label) {
+      const accountHash = ethers.utils.keccak256(
+        ethers.utils.toUtf8Bytes(account.substring(2).toLowerCase()),
+      )
+      await ens.setSubnodeOwner(ADDR_REVERSE, accountHash, accounts[0], {
+        from: accounts[0],
+      })
+      const node = getReverseNode(account)
+      await ens.setResolver(node, resolver.address, { from: accounts[0] })
+      await resolver.methods['setName(bytes32,string)'](node, label, {
+        from: accounts[0],
+      })
+    }
+
     beforeEach(async () => {
       resolver1 = await MockAddrResolver.new()
       resolver2 = await MockAddrResolver.new()
@@ -101,6 +127,21 @@ contracts.forEach(function ([ENS, lang]) {
       await setSubnodeOwner(ens3, resolver3, LABEL2, accounts[4])
       await setSubnodeOwner(ens3, resolver3, LABEL3, accounts[5])
       await setSubnodeOwner(ens3, resolver3, LABEL5, accounts[1])
+
+      // Setup reverse node
+      for (let ens of [ens1, ens2, ens3]) {
+        await ens.setSubnodeOwner(ZERO_NODE, LABEL_REVERSE, accounts[0], {
+          from: accounts[0],
+        })
+        await ens.setSubnodeOwner(
+          ethers.utils.namehash('reverse'),
+          LABEL_ADDR,
+          accounts[0],
+          {
+            from: accounts[0],
+          },
+        )
+      }
     })
 
     it('Test nonce', async () => {
@@ -251,13 +292,140 @@ contracts.forEach(function ([ENS, lang]) {
       assert.equal(await universal.getAddr(OPERATOR3, NODE5), accounts[1])
     })
 
-    // it('Test reverse record', async () => {
-    //   await exceptions.expectFailure(
-    //     ens.setOwner('0x1', '0x0000000000000000000000000000000000001234', {
-    //       from: accounts[0],
-    //     }),
-    //   )
-    // })
+    it('Can resolve basic reverse record', async () => {
+      await setReverseRecord(ens1, resolver1, accounts[0], 'node1')
+      await setReverseRecord(ens3, resolver3, accounts[0], 'node3')
+      await setReverseRecord(ens1, resolver1, accounts[1], 'node2')
+      await setReverseRecord(ens2, resolver2, accounts[1], 'node3')
+
+      await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
+      await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
+
+      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node1')
+      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node3')
+      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
+      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node3')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await setRegistryMapping(PK1, 2, [ens3.address, ens1.address])
+      await setRegistryMapping(PK2, 2, [ens1.address, ens3.address])
+
+      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node3')
+      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node1')
+      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
+      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node2')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await universal.setReverseRegistry(ens3.address)
+
+      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node3')
+      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node3')
+      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
+      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node2')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+    })
+
+    it('Can resolve reverse record of owned smart contracts', async () => {
+      await setReverseRecord(ens1, resolver1, resolver1.address, 'node1')
+      await setReverseRecord(ens3, resolver3, resolver1.address, 'node3')
+      await setReverseRecord(ens1, resolver1, resolver2.address, 'node2')
+      await setReverseRecord(ens2, resolver2, resolver2.address, 'node3')
+
+      await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
+      await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
+
+      assert.equal(
+        await universal.getName(resolver1.address, OPERATOR1),
+        'node1',
+      )
+      assert.equal(
+        await universal.getName(resolver1.address, OPERATOR2),
+        'node3',
+      )
+      assert.equal(
+        await universal.getName(resolver2.address, OPERATOR1),
+        'node2',
+      )
+      assert.equal(
+        await universal.getName(resolver2.address, OPERATOR2),
+        'node3',
+      )
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await setRegistryMapping(PK1, 2, [ens3.address, ens1.address])
+      await setRegistryMapping(PK2, 2, [ens1.address, ens3.address])
+
+      assert.equal(
+        await universal.getName(resolver1.address, OPERATOR1),
+        'node3',
+      )
+      assert.equal(
+        await universal.getName(resolver1.address, OPERATOR2),
+        'node1',
+      )
+      assert.equal(
+        await universal.getName(resolver2.address, OPERATOR1),
+        'node2',
+      )
+      assert.equal(
+        await universal.getName(resolver2.address, OPERATOR2),
+        'node2',
+      )
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await universal.setReverseRegistryForAddr(resolver1.address, ens3.address)
+
+      assert.equal(
+        await universal.getName(resolver1.address, OPERATOR1),
+        'node3',
+      )
+      assert.equal(
+        await universal.getName(resolver1.address, OPERATOR2),
+        'node3',
+      )
+      assert.equal(
+        await universal.getName(resolver2.address, OPERATOR1),
+        'node2',
+      )
+      assert.equal(
+        await universal.getName(resolver2.address, OPERATOR2),
+        'node2',
+      )
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+    })
+
+    it('Can set reverse record with signature', async () => {
+      await setReverseRecord(ens1, resolver1, accounts[0], 'node1')
+      await setReverseRecord(ens3, resolver3, accounts[0], 'node3')
+      await setReverseRecord(ens1, resolver1, accounts[1], 'node2')
+      await setReverseRecord(ens2, resolver2, accounts[1], 'node3')
+
+      await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
+      await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
+
+      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node1')
+      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node3')
+      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
+      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node3')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await setRegistryMapping(PK1, 2, [ens3.address, ens1.address])
+      await setRegistryMapping(PK2, 2, [ens1.address, ens3.address])
+
+      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node3')
+      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node1')
+      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
+      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node2')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await universal.setReverseRegistry(ens3.address)
+
+      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node3')
+      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node3')
+      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
+      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node2')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+    })
 
     // it('should allow setting resolvers', async () => {
     //   let addr = '0x0000000000000000000000000000000000001234'
