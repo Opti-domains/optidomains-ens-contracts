@@ -1,12 +1,14 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
+import "./UniversalResolverTemplate.sol";
 import "../registry/ENS.sol";
 import "../resolvers/profiles/IAddrResolver.sol";
 import "../resolvers/profiles/INameResolver.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
 import "hardhat/console.sol";
 
 bytes32 constant lookup = 0x3031323334353637383961626364656600000000000000000000000000000000;
@@ -26,11 +28,19 @@ error ReverseRecordNotFound(address addr, address operator);
 // Permissionless universal registry to resolve all ENS node regardless of the provider (ENS or Opti.Domains)
 contract UniversalENSRegistry {
     using ECDSA for bytes32;
+    
+    address public immutable universalResolverTemplate;
 
     mapping(address => address[]) public registryMapping;
     mapping(address => uint256) public currentNonce;
     mapping(address => uint256) public reverseNonce;
     mapping(address => ENS) public reverseRegistryMapping;
+    
+    mapping(address => address) public universalResolverMapping;
+    
+    constructor(address _universalResolverTemplate) {
+        universalResolverTemplate = _universalResolverTemplate;
+    }
 
     function isContract(address _addr) internal view returns (bool) {
         return _addr.code.length > 0;
@@ -73,6 +83,19 @@ contract UniversalENSRegistry {
     // ===================================================
     // UNIVERSAL REGISTRY RESOLVER
     // ===================================================
+    
+    event DeployUniversalResolver(address indexed deployer, address indexed registry, address indexed resolver);
+    
+    function _deployUniversalResolver(address registry) {
+        if (universalResolverMapping[registry] != address(0)) return;
+        
+        address resolver = Clones.cloneDeterministic(universalResolverTemplate, bytes32(uint256(uint160(registry))));
+        UniversalResolverTemplate(resolver).initialize(registry);
+        
+        universalResolverMapping[registry] = resolver;
+        
+        emit DeployUniversalResolver(msg.sender, registry, resolver);
+    }
 
     event SetRegistryMapping(
         address indexed operator,
@@ -120,6 +143,13 @@ contract UniversalENSRegistry {
 
         currentNonce[operator] = nonce;
         registryMapping[operator] = registries;
+        
+        unchecked {
+            uint256 registriesLength = registries.length;
+            for (uint256 i; i < registriesLength; ++i) {
+                _deployUniversalResolver(registries[i]);
+            }
+        }
 
         emit SetRegistryMapping(operator, nonce, registries);
     }
@@ -142,6 +172,13 @@ contract UniversalENSRegistry {
         }
 
         registry = ENS(address(0));
+    }
+    
+    function getUniversalResolver(
+        address operator,
+        bytes32 node
+    ) public view returns (address) {
+        return universalResolverMapping[getRegistry(operator, node)];
     }
 
     function getResolver(
@@ -191,15 +228,10 @@ contract UniversalENSRegistry {
             revert InvalidReverseRegistry(address(registry));
         }
 
-        address resolver = registry.resolver(node);
-        string memory name = INameResolver(resolver).name(node);
-
-        if (bytes(name).length == 0) {
-            revert InvalidReverseRegistry(address(registry));
-        }
-
         reverseRegistryMapping[addr] = registry;
         reverseNonce[addr] = nonce;
+        
+        _deployUniversalResolver(registry);
 
         emit SetReverseRegistry(addr, address(registry), name);
     }
@@ -276,9 +308,7 @@ contract UniversalENSRegistry {
                     return name;
                 } catch {}
             }
-        }
-
-        if (operator != address(0)) {
+        } else if (operator != address(0)) {
             address resolver = getResolver(operator, node);
             if (resolver != address(0) && isContract(resolver)) {
                 try INameResolver(resolver).name(node) returns (
