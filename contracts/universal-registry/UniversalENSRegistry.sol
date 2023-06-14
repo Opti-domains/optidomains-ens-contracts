@@ -196,8 +196,10 @@ contract UniversalENSRegistry {
     function getUniversalResolver(
         address operator,
         bytes32 node
-    ) public view returns (address) {
-        return universalResolverMapping[getRegistry(operator, node)];
+    ) public view returns (UniversalResolverTemplate) {
+        return UniversalResolverTemplate(
+            universalResolverMapping[getRegistry(operator, node)]
+        );
     }
 
     function getResolver(
@@ -308,6 +310,20 @@ contract UniversalENSRegistry {
         }
 
         _setReverseRegistry(addr, registry, nonce);
+    }
+    
+    function getReverseUniversalResolver(
+        address addr,
+        address operator
+    ) public view returns (UniversalResolverTemplate) {
+        bytes32 node = _getReverseNode(addr);
+        ENS registry = reverseRegistryMapping[addr];
+        
+        if (address(registry) != address(0) && isContract(address(registry))) {
+            return UniversalResolverTemplate(universalResolverMapping[address(registry)]);
+        } else {
+            return UniversalResolverTemplate(universalResolverMapping[getRegistry(operator, node)]);
+        }
     }
 
     function getName(
