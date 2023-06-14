@@ -24,6 +24,7 @@ error InvalidSignature();
 error NonceTooLow(uint256 nonce);
 error InvalidReverseRegistry(address registry);
 error ReverseRecordNotFound(address addr, address operator);
+error NotRegistryOwner();
 
 // Permissionless universal registry to resolve all ENS node regardless of the provider (ENS or Opti.Domains)
 contract UniversalENSRegistry {
@@ -32,6 +33,7 @@ contract UniversalENSRegistry {
     address public immutable universalResolverTemplate;
 
     mapping(address => address[]) public registryMapping;
+    mapping(address => string[]) internal gatewayUrlsMapping;
     mapping(address => uint256) public currentNonce;
     mapping(address => uint256) public reverseNonce;
     mapping(address => ENS) public reverseRegistryMapping;
@@ -147,11 +149,28 @@ contract UniversalENSRegistry {
         unchecked {
             uint256 registriesLength = registries.length;
             for (uint256 i; i < registriesLength; ++i) {
-                _deployUniversalResolver(registries[i]);
+                if (isContract(registries[i])) {
+                    _deployUniversalResolver(registries[i]);
+                }
             }
         }
 
         emit SetRegistryMapping(operator, nonce, registries);
+    }
+    
+    event SetGatewayUrls(address indexed registry, address indexed setter, string[] urls);
+    function setGatewayUrls(ENS registry, string[] memory urls) public {
+        if (msg.sender != registry.ownerOf(bytes32(0))) {
+            revert NotRegistryOwner();
+        }
+        
+        gatewayUrlsMapping[address(registry)] = urls;
+        
+        emit SetGatewayUrls(registry, msg.sender, urls);
+    }
+    
+    function getGatewayUrls(address registry) public view returns(string[] memory) {
+        return gatewayUrlsMapping[registry];
     }
 
     // Will return the first registry on the chain the has a resolver set
