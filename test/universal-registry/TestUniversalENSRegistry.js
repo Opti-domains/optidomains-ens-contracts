@@ -1,9 +1,13 @@
 const namehash = require('eth-ens-namehash')
 const { ethers } = require('hardhat')
+const { dns } = require('../test-utils')
 const sha3 = require('web3-utils').sha3
 
 const UniversalENSRegistry = artifacts.require(
   './universal-registry/UniversalENSRegistry.sol',
+)
+const UniversalResolverTemplate = artifacts.require(
+  './universal-registry/UniversalResolverTemplate.sol',
 )
 const MockAddrResolver = artifacts.require('./resolvers/MockAddrResolver.sol')
 
@@ -53,7 +57,79 @@ function getReverseNode(address) {
 
 contracts.forEach(function ([ENS, lang]) {
   contract('ENS ' + lang, function (accounts) {
-    let resolver1, resolver2, resolver3, universal, ens1, ens2, ens3
+    let universalResolverTemplate,
+      resolver1,
+      resolver2,
+      resolver3,
+      universal,
+      ens1,
+      ens2,
+      ens3
+
+    async function getAddressWithUniversalResolver(operator, name) {
+      const node = ethers.utils.namehash(name)
+      const UniversalResolverTemplate = await ethers.getContractFactory(
+        'UniversalResolverTemplate',
+      )
+      const registry = await universal.getRegistry(operator, node)
+      const resolver = await universal.getResolver(operator, node)
+      const ure = UniversalResolverTemplate.attach(
+        await universal.getUniversalResolver(operator, node),
+      )
+      let iface = new ethers.utils.Interface([
+        {
+          inputs: [
+            {
+              internalType: 'bytes32',
+              name: 'node',
+              type: 'bytes32',
+            },
+          ],
+          name: 'addr',
+          outputs: [
+            {
+              internalType: 'address payable',
+              name: '',
+              type: 'address',
+            },
+          ],
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ])
+      const address = await ure['resolve(bytes,bytes)'](
+        dns.hexEncodeName(name),
+        iface.encodeFunctionData('addr', [node]),
+      )
+      const addressParsed = ethers.utils.getAddress(
+        '0x' + address[0].substring(address[0].length - 40, address[0].length),
+      )
+
+      const byName1 = await universal.getRegistryByName(
+        operator,
+        dns.hexEncodeName(name),
+      )
+
+      assert.equal(byName1.registry, registry)
+      assert.equal(byName1.universalResolver, ure.address)
+      assert.equal(byName1.resolver, resolver)
+      assert.equal(byName1.node, node)
+
+      const byName2 = await universal.getRegistryByName(
+        operator,
+        dns.hexEncodeName('test.xyz.abc.def.' + name),
+      )
+
+      assert.equal(byName2.registry, registry)
+      assert.equal(byName2.universalResolver, ure.address)
+      assert.equal(byName2.resolver, resolver)
+      assert.equal(
+        byName2.node,
+        ethers.utils.namehash('test.xyz.abc.def.' + name),
+      )
+
+      return addressParsed
+    }
 
     async function setRegistryMapping(pk, nonce, registries, chainId = 0) {
       const signer = new ethers.Wallet(pk)
@@ -105,11 +181,15 @@ contracts.forEach(function ([ENS, lang]) {
     }
 
     beforeEach(async () => {
+      universalResolverTemplate = await UniversalResolverTemplate.new()
+
       resolver1 = await MockAddrResolver.new()
       resolver2 = await MockAddrResolver.new()
       resolver3 = await MockAddrResolver.new()
 
-      universal = await UniversalENSRegistry.new()
+      universal = await UniversalENSRegistry.new(
+        universalResolverTemplate.address,
+      )
 
       ens1 = await ENS.new(accounts[0])
       ens2 = await ENS.new(accounts[0])
@@ -155,6 +235,44 @@ contracts.forEach(function ([ENS, lang]) {
 
       await setRegistryMapping(PK2, 3, [ens1.address])
       await setRegistryMapping(PK2, 4, [ens1.address, ens2.address])
+    })
+
+    it('Test can set gatewayUrlsMapping', async () => {
+      await universal.setGatewayUrls(ens1.address, [
+        'http://1.1.1.1',
+        'http://1.1.1.2',
+      ])
+      await universal.setGatewayUrls(ens2.address, ['http://2.1.1.1'])
+
+      await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
+      await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
+
+      const UniversalResolverTemplate = await ethers.getContractFactory(
+        'UniversalResolverTemplate',
+      )
+
+      const ure1 = UniversalResolverTemplate.attach(
+        await universal.universalResolverMapping(ens1.address),
+      )
+      const ure2 = UniversalResolverTemplate.attach(
+        await universal.universalResolverMapping(ens2.address),
+      )
+      const ure3 = UniversalResolverTemplate.attach(
+        await universal.universalResolverMapping(ens3.address),
+      )
+
+      assert.equal(
+        JSON.stringify(await ure1.batchGatewayURLs()),
+        JSON.stringify(['http://1.1.1.1', 'http://1.1.1.2']),
+      )
+      assert.equal(
+        JSON.stringify(await ure2.batchGatewayURLs()),
+        JSON.stringify(['http://2.1.1.1']),
+      )
+      assert.equal(
+        JSON.stringify(await ure3.batchGatewayURLs()),
+        JSON.stringify([]),
+      )
     })
 
     it('Test get registry', async () => {
@@ -290,6 +408,91 @@ contracts.forEach(function ([ENS, lang]) {
       assert.equal(await universal.getAddr(OPERATOR3, NODE3), accounts[4])
       await exceptions.expectFailure(universal.getResolver(OPERATOR3, NODE4))
       assert.equal(await universal.getAddr(OPERATOR3, NODE5), accounts[1])
+    })
+
+    it('Test get address using universal resolver', async () => {
+      await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
+      await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
+
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR1, 'node1'),
+        accounts[1],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR1, 'node2'),
+        accounts[2],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR1, 'node3'),
+        accounts[4],
+      )
+      assert.equal(
+        await universal.getUniversalResolver(OPERATOR1, NODE4),
+        ADDRESS_ZERO,
+      )
+
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR2, 'node1'),
+        accounts[2],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR2, 'node2'),
+        accounts[4],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR2, 'node3'),
+        accounts[4],
+      )
+      assert.equal(
+        await universal.getUniversalResolver(OPERATOR2, NODE4),
+        ADDRESS_ZERO,
+      )
+
+      await setRegistryMapping(PK3, 1, [OPERATOR1, OPERATOR2])
+
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node1'),
+        accounts[1],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node2'),
+        accounts[2],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node3'),
+        accounts[4],
+      )
+      assert.equal(
+        await universal.getUniversalResolver(OPERATOR3, NODE4),
+        ADDRESS_ZERO,
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node5'),
+        accounts[1],
+      )
+
+      await setRegistryMapping(PK3, 2, [OPERATOR2, OPERATOR1])
+
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node1'),
+        accounts[2],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node2'),
+        accounts[4],
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node3'),
+        accounts[4],
+      )
+      assert.equal(
+        await universal.getUniversalResolver(OPERATOR3, NODE4),
+        ADDRESS_ZERO,
+      )
+      assert.equal(
+        await getAddressWithUniversalResolver(OPERATOR3, 'node5'),
+        accounts[1],
+      )
     })
 
     it('Can resolve basic reverse record', async () => {

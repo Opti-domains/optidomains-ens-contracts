@@ -3,8 +3,7 @@ pragma solidity ^0.8.17;
 
 import "./UniversalResolverTemplate.sol";
 import "../registry/ENS.sol";
-import "../resolvers/profiles/IAddrResolver.sol";
-import "../resolvers/profiles/INameResolver.sol";
+import {Resolver, INameResolver, IAddrResolver} from "../resolvers/Resolver.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -29,7 +28,7 @@ error NotRegistryOwner();
 // Permissionless universal registry to resolve all ENS node regardless of the provider (ENS or Opti.Domains)
 contract UniversalENSRegistry {
     using ECDSA for bytes32;
-    
+
     address public immutable universalResolverTemplate;
 
     mapping(address => address[]) public registryMapping;
@@ -37,9 +36,9 @@ contract UniversalENSRegistry {
     mapping(address => uint256) public currentNonce;
     mapping(address => uint256) public reverseNonce;
     mapping(address => ENS) public reverseRegistryMapping;
-    
+
     mapping(address => address) public universalResolverMapping;
-    
+
     constructor(address _universalResolverTemplate) {
         universalResolverTemplate = _universalResolverTemplate;
     }
@@ -85,30 +84,43 @@ contract UniversalENSRegistry {
     // ===================================================
     // UNIVERSAL REGISTRY RESOLVER
     // ===================================================
-    
-    event DeployUniversalResolver(address indexed deployer, address indexed registry, address indexed resolver);
-    
+
+    event DeployUniversalResolver(
+        address indexed deployer,
+        address indexed registry,
+        address indexed resolver
+    );
+
     function _deployUniversalResolver(address registry) internal {
         if (universalResolverMapping[registry] != address(0)) return;
-        
-        address resolver = Clones.cloneDeterministic(universalResolverTemplate, bytes32(uint256(uint160(registry))));
-        UniversalResolverTemplate(resolver).initialize(registry);
-        
+
+        address resolver = Clones.cloneDeterministic(
+            universalResolverTemplate,
+            bytes32(uint256(uint160(registry)))
+        );
+        UniversalResolverTemplate(resolver).initialize(ENS(registry));
+
         universalResolverMapping[registry] = resolver;
-        
+
         emit DeployUniversalResolver(msg.sender, registry, resolver);
     }
-    
-    function upgradeUniversalResolver(address template, address registry) public {
+
+    function upgradeUniversalResolver(
+        address template,
+        address registry
+    ) public {
         if (msg.sender != ENS(registry).owner(bytes32(0))) {
             revert NotRegistryOwner();
         }
-        
-        address resolver = Clones.cloneDeterministic(template, bytes32(uint256(uint160(registry))));
-        UniversalResolverTemplate(resolver).initialize(registry);
-        
+
+        address resolver = Clones.cloneDeterministic(
+            template,
+            bytes32(uint256(uint160(registry)))
+        );
+        UniversalResolverTemplate(resolver).initialize(ENS(registry));
+
         universalResolverMapping[registry] = resolver;
-        
+
         emit DeployUniversalResolver(msg.sender, registry, resolver);
     }
 
@@ -158,7 +170,7 @@ contract UniversalENSRegistry {
 
         currentNonce[operator] = nonce;
         registryMapping[operator] = registries;
-        
+
         unchecked {
             uint256 registriesLength = registries.length;
             for (uint256 i; i < registriesLength; ++i) {
@@ -170,19 +182,26 @@ contract UniversalENSRegistry {
 
         emit SetRegistryMapping(operator, nonce, registries);
     }
-    
-    event SetGatewayUrls(address indexed registry, address indexed setter, string[] urls);
+
+    event SetGatewayUrls(
+        address indexed registry,
+        address indexed setter,
+        string[] urls
+    );
+
     function setGatewayUrls(ENS registry, string[] memory urls) public {
         if (msg.sender != registry.owner(bytes32(0))) {
             revert NotRegistryOwner();
         }
-        
+
         gatewayUrlsMapping[address(registry)] = urls;
-        
-        emit SetGatewayUrls(registry, msg.sender, urls);
+
+        emit SetGatewayUrls(address(registry), msg.sender, urls);
     }
-    
-    function getGatewayUrls(address registry) public view returns(string[] memory) {
+
+    function getGatewayUrls(
+        address registry
+    ) public view returns (string[] memory) {
         return gatewayUrlsMapping[registry];
     }
 
@@ -205,14 +224,15 @@ contract UniversalENSRegistry {
 
         registry = ENS(address(0));
     }
-    
+
     function getUniversalResolver(
         address operator,
         bytes32 node
     ) public view returns (UniversalResolverTemplate) {
-        return UniversalResolverTemplate(
-            universalResolverMapping[getRegistry(operator, node)]
-        );
+        return
+            UniversalResolverTemplate(
+                universalResolverMapping[address(getRegistry(operator, node))]
+            );
     }
 
     function getResolver(
@@ -229,15 +249,69 @@ contract UniversalENSRegistry {
         return IAddrResolver(getResolver(operator, node)).addr(node);
     }
 
+    function getRegistryByName(
+        address operator,
+        bytes calldata name
+    )
+        public
+        view
+        returns (
+            ENS registry,
+            UniversalResolverTemplate universalResolver,
+            Resolver resolver,
+            bytes32 node,
+            uint256 finalOffset
+        )
+    {
+        unchecked {
+            for (uint256 i; i < registryMapping[operator].length; ++i) {
+                registry = ENS(registryMapping[operator][i]);
+                if (isContract(address(registry))) {
+                    universalResolver = UniversalResolverTemplate(
+                        universalResolverMapping[address(registry)]
+                    );
+                    (resolver, node, finalOffset) = universalResolver
+                        .findResolver(name);
+                    if (address(resolver) != address(0))
+                        return (
+                            registry,
+                            universalResolver,
+                            resolver,
+                            node,
+                            finalOffset
+                        );
+                } else {
+                    (
+                        registry,
+                        universalResolver,
+                        resolver,
+                        node,
+                        finalOffset
+                    ) = getRegistryByName(address(registry), name);
+                    if (address(registry) != address(0))
+                        return (
+                            registry,
+                            universalResolver,
+                            resolver,
+                            node,
+                            finalOffset
+                        );
+                }
+            }
+        }
+
+        registry = ENS(address(0));
+        universalResolver = UniversalResolverTemplate(address(0));
+        resolver = Resolver(address(0));
+        node = bytes32(0);
+        finalOffset = 0;
+    }
+
     // ===================================================
     // REVERSE REGISTRAR
     // ===================================================
 
-    event SetReverseRegistry(
-        address indexed addr,
-        address indexed registry,
-        string name
-    );
+    event SetReverseRegistry(address indexed addr, address indexed registry);
 
     function _getReverseNode(address addr) internal pure returns (bytes32) {
         return
@@ -256,18 +330,16 @@ contract UniversalENSRegistry {
             revert NonceTooLow(nonce);
         }
 
-        bytes32 node = _getReverseNode(addr);
-
         if (!isContract(address(registry))) {
             revert InvalidReverseRegistry(address(registry));
         }
 
         reverseRegistryMapping[addr] = registry;
         reverseNonce[addr] = nonce;
-        
-        _deployUniversalResolver(registry);
 
-        emit SetReverseRegistry(addr, address(registry), name);
+        _deployUniversalResolver(address(registry));
+
+        emit SetReverseRegistry(addr, address(registry));
     }
 
     function setReverseRegistryForAddr(address addr, ENS registry) public {
@@ -324,18 +396,26 @@ contract UniversalENSRegistry {
 
         _setReverseRegistry(addr, registry, nonce);
     }
-    
+
     function getReverseUniversalResolver(
         address addr,
         address operator
     ) public view returns (UniversalResolverTemplate) {
         bytes32 node = _getReverseNode(addr);
         ENS registry = reverseRegistryMapping[addr];
-        
+
         if (address(registry) != address(0) && isContract(address(registry))) {
-            return UniversalResolverTemplate(universalResolverMapping[address(registry)]);
+            return
+                UniversalResolverTemplate(
+                    universalResolverMapping[address(registry)]
+                );
         } else {
-            return UniversalResolverTemplate(universalResolverMapping[getRegistry(operator, node)]);
+            return
+                UniversalResolverTemplate(
+                    universalResolverMapping[
+                        address(getRegistry(operator, node))
+                    ]
+                );
         }
     }
 
