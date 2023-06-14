@@ -316,26 +316,16 @@ contract UniversalENSRegistry {
     ) public view returns (string memory) {
         bytes32 node = _getReverseNode(addr);
         ENS registry = reverseRegistryMapping[addr];
+        address resolver;
 
         if (address(registry) != address(0) && isContract(address(registry))) {
-            address resolver = registry.resolver(node);
-
-            if (resolver != address(0) && isContract(resolver)) {
-                try INameResolver(resolver).name(node) returns (
-                    string memory name
-                ) {
-                    return name;
-                } catch {}
-            }
+            resolver = registry.resolver(node);
         } else if (operator != address(0)) {
-            address resolver = getResolver(operator, node);
-            if (resolver != address(0) && isContract(resolver)) {
-                try INameResolver(resolver).name(node) returns (
-                    string memory name
-                ) {
-                    return name;
-                } catch {}
-            }
+            resolver = getResolver(operator, node);
+        }
+
+        if (resolver != address(0) && isContract(resolver)) {
+            return INameResolver(resolver).name(node);
         }
 
         revert ReverseRecordNotFound(addr, operator);
