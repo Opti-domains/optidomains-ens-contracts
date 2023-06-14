@@ -160,7 +160,7 @@ contract UniversalENSRegistry {
     
     event SetGatewayUrls(address indexed registry, address indexed setter, string[] urls);
     function setGatewayUrls(ENS registry, string[] memory urls) public {
-        if (msg.sender != registry.ownerOf(bytes32(0))) {
+        if (msg.sender != registry.owner(bytes32(0))) {
             revert NotRegistryOwner();
         }
         
