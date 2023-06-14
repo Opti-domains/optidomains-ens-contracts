@@ -88,10 +88,23 @@ contract UniversalENSRegistry {
     
     event DeployUniversalResolver(address indexed deployer, address indexed registry, address indexed resolver);
     
-    function _deployUniversalResolver(address registry) {
+    function _deployUniversalResolver(address registry) internal {
         if (universalResolverMapping[registry] != address(0)) return;
         
         address resolver = Clones.cloneDeterministic(universalResolverTemplate, bytes32(uint256(uint160(registry))));
+        UniversalResolverTemplate(resolver).initialize(registry);
+        
+        universalResolverMapping[registry] = resolver;
+        
+        emit DeployUniversalResolver(msg.sender, registry, resolver);
+    }
+    
+    function upgradeUniversalResolver(address template, address registry) public {
+        if (msg.sender != ENS(registry).owner(bytes32(0))) {
+            revert NotRegistryOwner();
+        }
+        
+        address resolver = Clones.cloneDeterministic(template, bytes32(uint256(uint160(registry))));
         UniversalResolverTemplate(resolver).initialize(registry);
         
         universalResolverMapping[registry] = resolver;
