@@ -10,6 +10,7 @@ import {Resolver, INameResolver, IAddrResolver} from "../resolvers/Resolver.sol"
 import {NameEncoder} from "../utils/NameEncoder.sol";
 import {BytesUtils} from "../wrapper/BytesUtils.sol";
 import {HexUtils} from "../utils/HexUtils.sol";
+import {BatchGateway} from "../utils/UniversalResolver.sol";
 
 error OffchainLookup(
     address sender,
@@ -43,12 +44,6 @@ struct OffchainLookupCallData {
 struct OffchainLookupExtraData {
     bytes4 callbackFunction;
     bytes data;
-}
-
-interface BatchGateway {
-    function query(
-        OffchainLookupCallData[] memory data
-    ) external returns (bool[] memory failures, bytes[] memory responses);
 }
 
 interface IHasBatchGatewayUrls {
