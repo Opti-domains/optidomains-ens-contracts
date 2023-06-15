@@ -1,5 +1,5 @@
 const namehash = require('eth-ens-namehash')
-const { ethers } = require('hardhat')
+const { ethers, network } = require('hardhat')
 const { dns } = require('../test-utils')
 const sha3 = require('web3-utils').sha3
 
@@ -17,6 +17,9 @@ let contracts = [[artifacts.require('./registry/ENSRegistry.sol'), 'Solidity']]
 
 const SET_REGISTRY_MAPPING = ethers.utils.keccak256(
   ethers.utils.toUtf8Bytes('UniversalENSRegistry.setRegistryMapping'),
+)
+const SET_REVERSE_REGISTRY = ethers.utils.keccak256(
+  ethers.utils.toUtf8Bytes('UniversalENSRegistry.setReverseRegistry'),
 )
 
 const ZERO_NODE =
@@ -180,6 +183,34 @@ contracts.forEach(function ([ENS, lang]) {
       })
     }
 
+    async function setReverseRegistryWithSignature(
+      pk,
+      ensAddress,
+      nonce,
+      chainId = 0,
+      expiry = 9735689600,
+    ) {
+      const signer = new ethers.Wallet(pk)
+      const digest = chainId
+        ? ethers.utils.solidityKeccak256(
+            ['bytes32', 'uint256', 'uint256', 'address', 'uint256'],
+            [SET_REVERSE_REGISTRY, chainId, nonce, ensAddress, expiry],
+          )
+        : ethers.utils.solidityKeccak256(
+            ['bytes32', 'uint256', 'address', 'uint256'],
+            [SET_REVERSE_REGISTRY, nonce, ensAddress, expiry],
+          )
+      const signature = await signer.signMessage(ethers.utils.arrayify(digest))
+
+      return await universal.setReverseRegistryWithSignature(
+        signer.address,
+        ensAddress,
+        nonce,
+        expiry,
+        signature,
+      )
+    }
+
     beforeEach(async () => {
       universalResolverTemplate = await UniversalResolverTemplate.new()
 
@@ -235,6 +266,16 @@ contracts.forEach(function ([ENS, lang]) {
 
       await setRegistryMapping(PK2, 3, [ens1.address])
       await setRegistryMapping(PK2, 4, [ens1.address, ens2.address])
+
+      await setRegistryMapping(
+        PK2,
+        5,
+        [ens1.address, ens2.address],
+        network.config.chainId,
+      )
+      await exceptions.expectFailure(
+        setRegistryMapping(PK2, 5, [ens1.address, ens2.address], 1),
+      )
     })
 
     it('Test can set gatewayUrlsMapping', async () => {
@@ -598,35 +639,63 @@ contracts.forEach(function ([ENS, lang]) {
     })
 
     it('Can set reverse record with signature', async () => {
-      await setReverseRecord(ens1, resolver1, accounts[0], 'node1')
-      await setReverseRecord(ens3, resolver3, accounts[0], 'node3')
-      await setReverseRecord(ens1, resolver1, accounts[1], 'node2')
-      await setReverseRecord(ens2, resolver2, accounts[1], 'node3')
+      await setReverseRecord(ens1, resolver1, OPERATOR1, 'node1')
+      await setReverseRecord(ens3, resolver3, OPERATOR1, 'node3')
+      await setReverseRecord(ens1, resolver1, OPERATOR2, 'node2')
+      await setReverseRecord(ens2, resolver2, OPERATOR2, 'node3')
 
       await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
       await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
 
-      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node1')
-      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node3')
-      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
-      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node3')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR1), 'node1')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR2), 'node3')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR1), 'node2')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR2), 'node3')
       await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
 
       await setRegistryMapping(PK1, 2, [ens3.address, ens1.address])
       await setRegistryMapping(PK2, 2, [ens1.address, ens3.address])
 
-      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node3')
-      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node1')
-      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
-      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node2')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR1), 'node3')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR2), 'node1')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR1), 'node2')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR2), 'node2')
       await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
 
-      await universal.setReverseRegistry(ens3.address)
+      await setReverseRegistryWithSignature(PK1, ens3.address, 3)
 
-      assert.equal(await universal.getName(accounts[0], OPERATOR1), 'node3')
-      assert.equal(await universal.getName(accounts[0], OPERATOR2), 'node3')
-      assert.equal(await universal.getName(accounts[1], OPERATOR1), 'node2')
-      assert.equal(await universal.getName(accounts[1], OPERATOR2), 'node2')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR1), 'node3')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR2), 'node3')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR1), 'node2')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR2), 'node2')
+      await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+
+      await exceptions.expectFailure(
+        setReverseRegistryWithSignature(PK1, ens1.address, 3),
+      )
+      await exceptions.expectFailure(
+        setReverseRegistryWithSignature(PK1, ens1.address, 4, 1),
+      )
+      await exceptions.expectFailure(
+        setReverseRegistryWithSignature(
+          PK1,
+          ens1.address,
+          4,
+          network.config.chainId,
+          1,
+        ),
+      )
+      await setReverseRegistryWithSignature(
+        PK1,
+        ens1.address,
+        4,
+        network.config.chainId,
+      )
+
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR1), 'node1')
+      assert.equal(await universal.getName(OPERATOR1, OPERATOR2), 'node1')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR1), 'node2')
+      assert.equal(await universal.getName(OPERATOR2, OPERATOR2), 'node2')
       await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
     })
 

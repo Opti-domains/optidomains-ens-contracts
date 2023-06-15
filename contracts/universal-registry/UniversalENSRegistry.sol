@@ -368,14 +368,14 @@ contract UniversalENSRegistry {
         }
 
         bytes32 digest = keccak256(
-            abi.encodePacked(SET_REGISTRY_MAPPING, nonce, registry, expiry)
+            abi.encodePacked(SET_REVERSE_REGISTRY, nonce, registry, expiry)
         ).toEthSignedMessageHash();
 
         if (!SignatureChecker.isValidSignatureNow(addr, digest, signature)) {
             // Try again with chain id requirement
             bytes32 digestWithChainId = keccak256(
                 abi.encodePacked(
-                    SET_REGISTRY_MAPPING,
+                    SET_REVERSE_REGISTRY,
                     block.chainid,
                     nonce,
                     registry,
