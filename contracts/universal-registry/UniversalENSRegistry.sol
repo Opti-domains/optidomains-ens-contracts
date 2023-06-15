@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "hardhat/console.sol";
 
 bytes32 constant lookup = 0x3031323334353637383961626364656600000000000000000000000000000000;
@@ -15,18 +16,19 @@ bytes32 constant ADDR_REVERSE_NODE = 0x91d1777781884d03a6757a803996e38de2a42967f
 bytes32 constant SET_REGISTRY_MAPPING = keccak256(
     "UniversalENSRegistry.setRegistryMapping"
 );
-bytes32 constant SET_REVERSE_REGISTRY = keccak256(
-    "UniversalENSRegistry.setReverseRegistry"
+bytes32 constant SET_REVERSE_REGISTRY_TYPEHASH = keccak256(
+    "SetReverseRegistry(address registry,uint256 nonce,uint256 deadline)"
 );
 
 error InvalidSignature();
+error SignatureExpired();
 error NonceTooLow(uint256 nonce);
 error InvalidReverseRegistry(address registry);
 error ReverseRecordNotFound(address addr, address operator);
 error NotRegistryOwner();
 
 // Permissionless universal registry to resolve all ENS node regardless of the provider (ENS or Opti.Domains)
-contract UniversalENSRegistry {
+contract UniversalENSRegistry is EIP712 {
     using ECDSA for bytes32;
 
     address public immutable universalResolverTemplate;
@@ -39,7 +41,9 @@ contract UniversalENSRegistry {
 
     mapping(address => address) public universalResolverMapping;
 
-    constructor(address _universalResolverTemplate) {
+    constructor(
+        address _universalResolverTemplate
+    ) EIP712("UniversalENSRegistry", "1") {
         universalResolverTemplate = _universalResolverTemplate;
     }
 
@@ -360,38 +364,24 @@ contract UniversalENSRegistry {
         address addr,
         ENS registry,
         uint256 nonce,
-        uint256 expiry,
+        uint256 deadline,
         bytes calldata signature
     ) public {
-        if (expiry < block.timestamp) {
-            revert InvalidSignature();
+        if (deadline < block.timestamp) {
+            revert SignatureExpired();
         }
 
-        bytes32 digest = keccak256(
-            abi.encodePacked(SET_REVERSE_REGISTRY, nonce, registry, expiry)
-        ).toEthSignedMessageHash();
-
+        bytes32 structHash = keccak256(
+            abi.encode(
+                SET_REVERSE_REGISTRY_TYPEHASH,
+                address(registry),
+                nonce,
+                deadline
+            )
+        );
+        bytes32 digest = _hashTypedDataV4(structHash);
         if (!SignatureChecker.isValidSignatureNow(addr, digest, signature)) {
-            // Try again with chain id requirement
-            bytes32 digestWithChainId = keccak256(
-                abi.encodePacked(
-                    SET_REVERSE_REGISTRY,
-                    block.chainid,
-                    nonce,
-                    registry,
-                    expiry
-                )
-            ).toEthSignedMessageHash();
-
-            if (
-                !SignatureChecker.isValidSignatureNow(
-                    addr,
-                    digestWithChainId,
-                    signature
-                )
-            ) {
-                revert InvalidSignature();
-            }
+            revert InvalidSignature();
         }
 
         _setReverseRegistry(addr, registry, nonce);

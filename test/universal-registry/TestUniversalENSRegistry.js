@@ -187,26 +187,38 @@ contracts.forEach(function ([ENS, lang]) {
       pk,
       ensAddress,
       nonce,
-      chainId = 0,
-      expiry = 9735689600,
+      deadline = 9735689600,
     ) {
       const signer = new ethers.Wallet(pk)
-      const digest = chainId
-        ? ethers.utils.solidityKeccak256(
-            ['bytes32', 'uint256', 'uint256', 'address', 'uint256'],
-            [SET_REVERSE_REGISTRY, chainId, nonce, ensAddress, expiry],
-          )
-        : ethers.utils.solidityKeccak256(
-            ['bytes32', 'uint256', 'address', 'uint256'],
-            [SET_REVERSE_REGISTRY, nonce, ensAddress, expiry],
-          )
-      const signature = await signer.signMessage(ethers.utils.arrayify(digest))
+
+      const domain = {
+        name: 'UniversalENSRegistry', // contract deploy name
+        version: '1', // contract deploy version
+        chainId: network.config.chainId, // env chain id
+        verifyingContract: universal.address,
+      }
+
+      const types = {
+        SetReverseRegistry: [
+          { name: 'registry', type: 'address' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      }
+
+      const value = {
+        registry: ensAddress,
+        nonce,
+        deadline,
+      }
+
+      const signature = await signer._signTypedData(domain, types, value)
 
       return await universal.setReverseRegistryWithSignature(
         signer.address,
         ensAddress,
         nonce,
-        expiry,
+        deadline,
         signature,
       )
     }
@@ -676,21 +688,7 @@ contracts.forEach(function ([ENS, lang]) {
       await exceptions.expectFailure(
         setReverseRegistryWithSignature(PK1, ens1.address, 4, 1),
       )
-      await exceptions.expectFailure(
-        setReverseRegistryWithSignature(
-          PK1,
-          ens1.address,
-          4,
-          network.config.chainId,
-          1,
-        ),
-      )
-      await setReverseRegistryWithSignature(
-        PK1,
-        ens1.address,
-        4,
-        network.config.chainId,
-      )
+      await setReverseRegistryWithSignature(PK1, ens1.address, 4)
 
       assert.equal(await universal.getName(OPERATOR1, OPERATOR1), 'node1')
       assert.equal(await universal.getName(OPERATOR1, OPERATOR2), 'node1')
