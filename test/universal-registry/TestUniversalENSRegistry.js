@@ -223,6 +223,45 @@ contracts.forEach(function ([ENS, lang]) {
       )
     }
 
+    async function getNameWithUniversalResolver(address, operator) {
+      const name = address.substring(2).toLowerCase() + '.addr.reverse'
+      const node = getReverseNode(address)
+      const UniversalResolverTemplate = await ethers.getContractFactory(
+        'UniversalResolverTemplate',
+      )
+      const ure = UniversalResolverTemplate.attach(
+        await universal.getReverseUniversalResolver(address, operator),
+      )
+      let iface = new ethers.utils.Interface([
+        {
+          constant: true,
+          inputs: [
+            {
+              internalType: 'bytes32',
+              name: 'node',
+              type: 'bytes32',
+            },
+          ],
+          name: 'name',
+          outputs: [
+            {
+              internalType: 'string',
+              name: '',
+              type: 'string',
+            },
+          ],
+          payable: false,
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ])
+      const nameBytes = await ure['resolve(bytes,bytes)'](
+        dns.hexEncodeName(name),
+        iface.encodeFunctionData('name', [node]),
+      )
+      return ethers.utils.defaultAbiCoder.decode(['string'], nameBytes[0])
+    }
+
     beforeEach(async () => {
       universalResolverTemplate = await UniversalResolverTemplate.new()
 
@@ -695,6 +734,81 @@ contracts.forEach(function ([ENS, lang]) {
       assert.equal(await universal.getName(OPERATOR2, OPERATOR1), 'node2')
       assert.equal(await universal.getName(OPERATOR2, OPERATOR2), 'node2')
       await exceptions.expectFailure(universal.getName(accounts[2], OPERATOR1))
+    })
+
+    it('Can resolve reverse record with universal resolver', async () => {
+      await setReverseRecord(ens1, resolver1, accounts[0], 'node1')
+      await setReverseRecord(ens3, resolver3, accounts[0], 'node3')
+      await setReverseRecord(ens1, resolver1, accounts[1], 'node2')
+      await setReverseRecord(ens2, resolver2, accounts[1], 'node3')
+
+      await setRegistryMapping(PK1, 1, [ens1.address, ens2.address])
+      await setRegistryMapping(PK2, 1, [ens2.address, ens3.address])
+
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[0], OPERATOR1),
+        'node1',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[0], OPERATOR2),
+        'node3',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[1], OPERATOR1),
+        'node2',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[1], OPERATOR2),
+        'node3',
+      )
+      await exceptions.expectFailure(
+        getNameWithUniversalResolver(accounts[2], OPERATOR1),
+      )
+
+      await setRegistryMapping(PK1, 2, [ens3.address, ens1.address])
+      await setRegistryMapping(PK2, 2, [ens1.address, ens3.address])
+
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[0], OPERATOR1),
+        'node3',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[0], OPERATOR2),
+        'node1',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[1], OPERATOR1),
+        'node2',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[1], OPERATOR2),
+        'node2',
+      )
+      await exceptions.expectFailure(
+        getNameWithUniversalResolver(accounts[2], OPERATOR1),
+      )
+
+      await universal.setReverseRegistry(ens3.address)
+
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[0], OPERATOR1),
+        'node3',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[0], OPERATOR2),
+        'node3',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[1], OPERATOR1),
+        'node2',
+      )
+      assert.equal(
+        await getNameWithUniversalResolver(accounts[1], OPERATOR2),
+        'node2',
+      )
+      await exceptions.expectFailure(
+        getNameWithUniversalResolver(accounts[2], OPERATOR1),
+      )
     })
 
     // it('should allow setting resolvers', async () => {
