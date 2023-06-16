@@ -18,9 +18,6 @@ let contracts = [[artifacts.require('./registry/ENSRegistry.sol'), 'Solidity']]
 const SET_REGISTRY_MAPPING = ethers.utils.keccak256(
   ethers.utils.toUtf8Bytes('UniversalENSRegistry.setRegistryMapping'),
 )
-const SET_REVERSE_REGISTRY = ethers.utils.keccak256(
-  ethers.utils.toUtf8Bytes('UniversalENSRegistry.setReverseRegistry'),
-)
 
 const ZERO_NODE =
   '0x0000000000000000000000000000000000000000000000000000000000000000'

@@ -95,7 +95,7 @@ contract UniversalENSRegistry is EIP712 {
         address indexed resolver
     );
 
-    function _deployUniversalResolver(address registry) internal {
+    function deployUniversalResolver(address registry) public {
         if (universalResolverMapping[registry] != address(0)) return;
 
         address resolver = Clones.cloneDeterministic(
@@ -179,7 +179,7 @@ contract UniversalENSRegistry is EIP712 {
             uint256 registriesLength = registries.length;
             for (uint256 i; i < registriesLength; ++i) {
                 if (isContract(registries[i])) {
-                    _deployUniversalResolver(registries[i]);
+                    deployUniversalResolver(registries[i]);
                 }
             }
         }
@@ -341,7 +341,7 @@ contract UniversalENSRegistry is EIP712 {
         reverseRegistryMapping[addr] = registry;
         reverseNonce[addr] = nonce;
 
-        _deployUniversalResolver(address(registry));
+        deployUniversalResolver(address(registry));
 
         emit SetReverseRegistry(addr, address(registry));
     }
