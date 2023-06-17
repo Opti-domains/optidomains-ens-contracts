@@ -229,34 +229,9 @@ contracts.forEach(function ([ENS, lang]) {
       const ure = UniversalResolverTemplate.attach(
         await universal.getReverseUniversalResolver(address, operator),
       )
-      let iface = new ethers.utils.Interface([
-        {
-          constant: true,
-          inputs: [
-            {
-              internalType: 'bytes32',
-              name: 'node',
-              type: 'bytes32',
-            },
-          ],
-          name: 'name',
-          outputs: [
-            {
-              internalType: 'string',
-              name: '',
-              type: 'string',
-            },
-          ],
-          payable: false,
-          stateMutability: 'view',
-          type: 'function',
-        },
-      ])
-      const nameBytes = await ure['resolve(bytes,bytes)'](
-        dns.hexEncodeName(name),
-        iface.encodeFunctionData('name', [node]),
-      )
-      return ethers.utils.defaultAbiCoder.decode(['string'], nameBytes[0])
+      const nameBytes = await ure['reverse(bytes)'](dns.hexEncodeName(name))
+      console.log(name)
+      return nameBytes[0]
     }
 
     beforeEach(async () => {
