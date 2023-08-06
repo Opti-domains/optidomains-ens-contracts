@@ -51,6 +51,13 @@ contract OptiTownRetroToken is ERC20, Ownable {
         require(false, "Soulbound");
     }
 
+    event AllowRedeem(address allower, uint256 index);
+
+    function setAllowedRedeemIndex(uint256 index) public onlyOwner {
+        allowedRedeemIndex = index;
+        emit AllowRedeem(msg.sender, index);
+    }
+
     event Redeem(
         address indexed redeemer,
         address indexed pool,
