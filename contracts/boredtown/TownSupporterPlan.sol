@@ -67,7 +67,7 @@ contract TownSupporterPlan is ISupporterPlan, SchemaResolver, Ownable {
 
     // Supporter Plan module
     function buy(string memory name) external payable {
-        // require(msg.sender == TOWN_REGISTRAR, "Forbidden");
+        require(msg.sender == TOWN_REGISTRAR, "Forbidden");
 
         bytes32 labelHash = keccak256(bytes(name));
         bytes32 node = keccak256(abi.encodePacked(TOWN_BASE_NODE, labelHash));
