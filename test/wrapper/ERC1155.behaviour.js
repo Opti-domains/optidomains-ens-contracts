@@ -310,9 +310,19 @@ function shouldBehaveLikeERC1155(
           expect(newBalance.toString()).to.equal('0')
         })
 
+        it('debits transferred 721 balance from sender', async function () {
+          const newBalance = await token['balanceOf(address)'](from)
+          expect(newBalance.toString()).to.equal('0')
+        })
+
         it('credits transferred balance to receiver', async function () {
           const newBalance = await token.balanceOf(this.toWhom, id)
           expect(newBalance.toString()).to.equal(value.toString())
+        })
+
+        it('credits transferred 721 balance to receiver', async function () {
+          const newBalance = await token['balanceOf(address)'](this.toWhom)
+          expect(newBalance.toString()).to.equal('1')
         })
 
         it('emits a TransferSingle log', async function () {

@@ -6103,6 +6103,7 @@ describe('Name Wrapper', () => {
         NameWrapper.address,
       )
       expect(await NameWrapper.ownerOf(wrappedTokenId)).to.equal(account)
+      expect(await NameWrapper['balanceOf(address)'](account)).to.equal(1)
     })
 
     it('allows specifying a resolver address', async () => {

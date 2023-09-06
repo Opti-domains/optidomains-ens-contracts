@@ -26,6 +26,9 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
     // Mapping from token ID to approved address
     mapping(uint256 => address) internal _tokenApprovals;
 
+    // Mapping from owner to balance
+    mapping(address => uint256) internal _balanceOf;
+
     /**************************************************************************
      * ERC721 methods
      *************************************************************************/
@@ -220,10 +223,20 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         uint32 fuses,
         uint64 expiry
     ) internal virtual {
+        address oldOwner = address(uint160(_tokens[tokenId]));
+
+        if (oldOwner != address(0)) {
+            --_balanceOf[oldOwner];
+        }
+
         _tokens[tokenId] =
             uint256(uint160(owner)) |
             (uint256(fuses) << 160) |
             (uint256(expiry) << 192);
+
+        if (owner != address(0)) {
+            ++_balanceOf[owner];
+        }
     }
 
     function _beforeTransfer(
