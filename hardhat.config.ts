@@ -88,10 +88,10 @@ const config: HardhatUserConfig = {
       chainId: 420,
       accounts: real_accounts,
     },
-    base_goerli: {
-      url: `https://goerli.base.org`,
+    base: {
+      url: `https://mainnet.base.org`,
       tags: ['test', 'use_root'],
-      chainId: 84531,
+      chainId: 8453,
       accounts: real_accounts,
     },
   },
@@ -163,6 +163,9 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+  },
+  sourcify: {
+    enabled: true,
   },
 }
 
