@@ -104,3 +104,17 @@ console.log(addrReverse)
 
   console.log(resolver)
 }
+
+const ADDRESS_PROBLEM = '000000187c72ee4a4120a3e626425595a34f185b'
+
+const xxx = ethers.utils.solidityKeccak256(
+  ['bytes32', 'bytes32'],
+  [
+    addrReverse,
+    ethers.utils.keccak256(ethers.utils.toUtf8Bytes(ADDRESS_PROBLEM)),
+  ],
+)
+console.log(xxx)
+console.log(ethers.utils.namehash('addr.reverse'))
+console.log(ethers.utils.keccak256(ethers.utils.toUtf8Bytes(ADDRESS_PROBLEM)))
+console.log(ethers.utils.namehash(ADDRESS_PROBLEM + '.addr.reverse'))

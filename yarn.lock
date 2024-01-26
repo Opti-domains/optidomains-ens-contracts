@@ -158,6 +158,13 @@
     bluebird "^3.5.2"
     dns-packet "^5.0.4"
 
+"@ethereum-attestation-service/eas-contracts@^1.0.0-beta.0":
+  version "1.0.0-beta.0"
+  resolved "https://registry.yarnpkg.com/@ethereum-attestation-service/eas-contracts/-/eas-contracts-1.0.0-beta.0.tgz#631357725c63f5350c56398877abbd9adf5e8b36"
+  integrity sha512-kMe8XVl5QXI1L8ANqlVJqLv3WDs2uzz9+dzY9LUXvBKWF00tBhNji9lxEg4LKN0vz4YVL9bAUDuDeeSv8BOWdw==
+  dependencies:
+    hardhat "2.17.0"
+
 "@ethereum-waffle/chai@^3.4.4":
   version "3.4.4"
   resolved "https://registry.yarnpkg.com/@ethereum-waffle/chai/-/chai-3.4.4.tgz#16c4cc877df31b035d6d92486dfdf983df9138ff"

@@ -59,6 +59,7 @@
     "@axelar-network/axelar-gmp-sdk-solidity": "^3.3.0",
     "@ensdomains/buffer": "^0.1.1",
     "@ensdomains/solsha1": "0.0.3",
+    "@ethereum-attestation-service/eas-contracts": "^1.0.0-beta.0",
     "@openzeppelin/contracts": "^4.1.0",
     "dns-packet": "^5.3.0"
   },

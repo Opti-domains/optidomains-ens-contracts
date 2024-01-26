@@ -2,15 +2,15 @@
 pragma solidity >=0.8.17 <0.9.0;
 
 import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {LowLevelCallUtils} from "./LowLevelCallUtils.sol";
+import {LowLevelCallUtils} from "../utils/LowLevelCallUtils.sol";
 import {ENS} from "../registry/ENS.sol";
 import {IExtendedResolver} from "../resolvers/profiles/IExtendedResolver.sol";
 import {Resolver, INameResolver, IAddrResolver} from "../resolvers/Resolver.sol";
-import {NameEncoder} from "./NameEncoder.sol";
+import {NameEncoder} from "../utils/NameEncoder.sol";
 import {BytesUtils} from "../wrapper/BytesUtils.sol";
-import {HexUtils} from "./HexUtils.sol";
+import {HexUtils} from "../utils/HexUtils.sol";
+import {BatchGateway} from "../utils/UniversalResolver.sol";
 
 error OffchainLookup(
     address sender,
@@ -46,32 +46,36 @@ struct OffchainLookupExtraData {
     bytes data;
 }
 
-interface BatchGateway {
-    function query(
-        OffchainLookupCallData[] memory data
-    ) external returns (bool[] memory failures, bytes[] memory responses);
+interface IHasBatchGatewayUrls {
+    function getGatewayUrls(
+        address registry
+    ) external view returns (string[] memory);
 }
 
 /**
  * The Universal Resolver is a contract that handles the work of resolving a name entirely onchain,
  * making it possible to make a single smart contract call to resolve an ENS name.
  */
-contract UniversalResolver is ERC165, Ownable {
+contract UniversalResolverTemplate is ERC165 {
     using Address for address;
     using NameEncoder for string;
     using BytesUtils for bytes;
     using HexUtils for bytes;
 
-    string[] public batchGatewayURLs;
-    ENS public immutable registry;
+    address public universalRegistry;
+    ENS public registry;
 
-    constructor(address _registry, string[] memory _urls) {
-        registry = ENS(_registry);
-        batchGatewayURLs = _urls;
+    function initialize(ENS _registry) public {
+        require(universalRegistry == address(0), "Initialized");
+        universalRegistry = msg.sender;
+        registry = _registry;
     }
 
-    function setGatewayURLs(string[] memory _urls) public onlyOwner {
-        batchGatewayURLs = _urls;
+    function batchGatewayURLs() public view returns (string[] memory) {
+        return
+            IHasBatchGatewayUrls(universalRegistry).getGatewayUrls(
+                address(registry)
+            );
     }
 
     /**
@@ -88,7 +92,7 @@ contract UniversalResolver is ERC165, Ownable {
             _resolveSingle(
                 name,
                 data,
-                batchGatewayURLs,
+                batchGatewayURLs(),
                 this.resolveSingleCallback.selector,
                 ""
             );
@@ -98,7 +102,7 @@ contract UniversalResolver is ERC165, Ownable {
         bytes calldata name,
         bytes[] memory data
     ) external view returns (bytes[] memory, address) {
-        return resolve(name, data, batchGatewayURLs);
+        return resolve(name, data, batchGatewayURLs());
     }
 
     function resolve(
@@ -176,7 +180,7 @@ contract UniversalResolver is ERC165, Ownable {
     function reverse(
         bytes calldata reverseName
     ) external view returns (string memory, address, address, address) {
-        return reverse(reverseName, batchGatewayURLs);
+        return reverse(reverseName, batchGatewayURLs());
     }
 
     /**
